@@ -162,4 +162,4 @@ secretdrop/
 
 ## License
 
-TBD
+MIT — see [LICENCE](LICENCE) for details.
