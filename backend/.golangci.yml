@@ -36,10 +36,13 @@ linters:
       exclude-functions:
         - fmt.Fprintln
         - fmt.Fprintf
+        - fmt.Fprint
     wrapcheck:
       ignore-package-globs:
         - encoding/*
         - github.com/pkg/*
+        - github.com/google/uuid
+        - github.com/resend/resend-go/*
     revive:
       enable-all-rules: true
       rules:
@@ -58,6 +61,8 @@ linters:
             - max-lit-count: "3"
               allow-strs: '""'
               allow-ints: "0,1,2,10,64"
+        - name: max-public-structs
+          arguments: [10]
 
 formatters:
   enable:

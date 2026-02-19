@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
+	"github.com/bilusteknoloji/secretdrop/internal/config"
+	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilusteknoloji/secretdrop/internal/handler"
+	"github.com/bilusteknoloji/secretdrop/internal/middleware"
+	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
 
 const (
-	defaultAddr         = ":8080"
 	readHeaderTimeout   = 5 * time.Second
 	shutdownGracePeriod = 10 * time.Second
 )
@@ -21,17 +27,50 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", handleHello)
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("load config", "error", err)
+		os.Exit(1)
+	}
 
+	repo, err := repository.NewSQLite(cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("open database", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := repo.Close(); err != nil {
+			slog.Error("close database", "error", err)
+		}
+	}()
+
+	sender := email.NewResendSender(cfg.ResendAPIKey, cfg.FromEmail)
+	svc := service.NewSecretService(repo, sender, cfg.BaseURL, cfg.FromEmail, cfg.SecretExpiry)
+	h := handler.NewSecretHandler(svc)
+
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	rl := middleware.NewRateLimiter()
+
+	var chain http.Handler = mux
+	chain = middleware.RequireJSON(chain)
+	chain = rl.Limit(chain)
+	chain = middleware.Logging(chain)
+	chain = middleware.RequestID(chain)
+
+	addr := ":" + cfg.Port
 	srv := &http.Server{
-		Addr:              defaultAddr,
-		Handler:           mux,
+		Addr:              addr,
+		Handler:           chain,
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
+	cleanupWorker := cleanup.NewWorker(repo, cfg.CleanupInterval)
+	cleanupWorker.Start()
+
 	go func() {
-		slog.Info("server starting", "addr", defaultAddr)
+		slog.Info("server starting", "addr", addr)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server failed", "error", err)
@@ -45,6 +84,8 @@ func main() {
 
 	slog.Info("shutting down server", "signal", sig.String())
 
+	cleanupWorker.Stop()
+
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 
@@ -54,13 +95,4 @@ func main() {
 	}
 
 	slog.Info("server stopped gracefully")
-}
-
-func handleHello(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	resp := map[string]string{"message": "Hello, World!"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("failed to encode response", "error", err)
-	}
 }
