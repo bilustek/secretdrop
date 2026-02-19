@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +18,9 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
+
+//go:embed docs/openapi.yaml
+var openAPISpec []byte
 
 const (
 	readHeaderTimeout   = 5 * time.Second
@@ -50,6 +54,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	h.Register(mux)
+
+	handler.SetOpenAPISpec(openAPISpec)
+	handler.RegisterDocs(mux)
 
 	rl := middleware.NewRateLimiter()
 
