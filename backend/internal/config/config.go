@@ -9,7 +9,7 @@ import (
 
 const (
 	defaultPort            = "8080"
-	defaultDatabaseURL     = "file:secretdrop.db?_journal_mode=WAL"
+	defaultDatabaseURL     = "file:db/secretdrop.db?_journal_mode=WAL"
 	defaultBaseURL         = "http://localhost:3000"
 	defaultFromEmail       = "SecretDrop <noreply@secretdrop.app>"
 	defaultSecretExpiry    = 10 * time.Minute

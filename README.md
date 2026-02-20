@@ -52,7 +52,7 @@ Create a `.env` file and `source` it, or export directly:
 # backend/.env (git-ignored)
 export RESEND_API_KEY=re_xxxxx          # (required) Resend API key
 export PORT=8080                         # server port
-export DATABASE_URL="file:secretdrop.db?_journal_mode=WAL"  # SQLite path
+export DATABASE_URL="file:db/secretdrop.db?_journal_mode=WAL"  # SQLite path
 export BASE_URL=http://localhost:3000    # frontend URL (used in links)
 export FROM_EMAIL="SecretDrop <noreply@secretdrop.app>"     # sender address
 export SECRET_EXPIRY=10m                 # secret TTL

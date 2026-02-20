@@ -24,7 +24,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("Port() = %q; want %q", cfg.Port(), "8080")
 	}
 
-	if cfg.DatabaseURL() != "file:secretdrop.db?_journal_mode=WAL" {
+	if cfg.DatabaseURL() != "file:db/secretdrop.db?_journal_mode=WAL" {
 		t.Errorf("DatabaseURL() = %q; want default", cfg.DatabaseURL())
 	}
 

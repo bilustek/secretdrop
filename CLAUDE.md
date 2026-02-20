@@ -74,7 +74,7 @@ secretdrop/
 | `GOLANG_ENV` | No | `production` |
 | `RESEND_API_KEY` | Yes (prod only) | — |
 | `PORT` | No | `8080` |
-| `DATABASE_URL` | No | `file:secretdrop.db?_journal_mode=WAL` |
+| `DATABASE_URL` | No | `file:db/secretdrop.db?_journal_mode=WAL` |
 | `BASE_URL` | No | `http://localhost:3000` |
 | `FROM_EMAIL` | No | `SecretDrop <noreply@secretdrop.app>` |
 | `SECRET_EXPIRY` | No | `10m` |

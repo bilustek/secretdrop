@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 const (
 	readHeaderTimeout   = 5 * time.Second
 	shutdownGracePeriod = 10 * time.Second
+	dbDirPermissions    = 0o750
 )
 
 func main() {
@@ -45,6 +48,13 @@ func Run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Ensure database directory exists.
+	if dir := dbDir(cfg.DatabaseURL()); dir != "." && dir != "" {
+		if mkErr := os.MkdirAll(dir, dbDirPermissions); mkErr != nil {
+			return fmt.Errorf("create database directory: %w", mkErr)
+		}
 	}
 
 	repo, err := sqlite.New(cfg.DatabaseURL())
@@ -223,4 +233,14 @@ func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *use
 	mux.HandleFunc("POST /billing/portal", billingSvc.HandlePortal())
 
 	return nil
+}
+
+// dbDir extracts the directory from a SQLite DSN like "file:db/secretdrop.db?_journal_mode=WAL".
+func dbDir(dsn string) string {
+	path := strings.TrimPrefix(dsn, "file:")
+	if i := strings.Index(path, "?"); i != -1 {
+		path = path[:i]
+	}
+
+	return filepath.Dir(path)
 }
