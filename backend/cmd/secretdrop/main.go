@@ -85,7 +85,10 @@ func Run() error {
 		slog.Warn("using default JWT secret for development mode")
 	}
 
-	authSvc, err := auth.New(jwtSecret, auth.WithGoogleClientID(cfg.GoogleClientID()))
+	authSvc, err := auth.New(jwtSecret,
+		auth.WithGoogleClientID(cfg.GoogleClientID()),
+		auth.WithFrontendBaseURL(cfg.FrontendBaseURL()),
+	)
 	if err != nil {
 		return fmt.Errorf("create auth service: %w", err)
 	}

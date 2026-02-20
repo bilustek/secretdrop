@@ -167,7 +167,7 @@ func (s *Service) HandleGithubCallback(cfg *oauth2.Config, userRepo user.Reposit
 			return
 		}
 
-		writeJSON(w, http.StatusOK, pair)
+		s.redirectWithTokens(w, r, pair)
 	}
 }
 
