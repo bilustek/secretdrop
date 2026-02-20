@@ -1,5 +1,5 @@
 ![Version](https://img.shields.io/badge/version-0.0.0-orange.svg)
-![Go](https://img.shields.io/github/go-mod/go-version/bilusteknoloji/secretdrop)
+![Go](https://img.shields.io/github/go-mod/go-version/bilusteknoloji/secretdrop/backend)
 [![Run golangci-lint](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml)
 [![Run go tests](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/bilusteknoloji/secretdrop/graph/badge.svg?token=96Z01WRM6E)](https://codecov.io/gh/bilusteknoloji/secretdrop)
