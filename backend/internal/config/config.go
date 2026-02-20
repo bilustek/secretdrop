@@ -10,7 +10,8 @@ import (
 const (
 	defaultPort            = "8080"
 	defaultDatabaseURL     = "file:db/secretdrop.db?_journal_mode=WAL"
-	defaultBaseURL         = "http://localhost:3000"
+	defaultAPIBaseURL      = "http://localhost:8080"
+	defaultFrontendBaseURL = "http://localhost:3000"
 	defaultFromEmail       = "SecretDrop <noreply@secretdrop.us>"
 	defaultSecretExpiry    = 10 * time.Minute
 	defaultCleanupInterval = 1 * time.Minute
@@ -23,7 +24,8 @@ type Config struct {
 	port            string
 	databaseURL     string
 	resendAPIKey    string
-	baseURL         string
+	apiBaseURL      string
+	frontendBaseURL string
 	fromEmail       string
 	secretExpiry    time.Duration
 	cleanupInterval time.Duration
@@ -93,14 +95,27 @@ func WithResendAPIKey(key string) Option {
 	}
 }
 
-// WithBaseURL sets the base URL for generated links.
-func WithBaseURL(url string) Option {
+// WithAPIBaseURL sets the API base URL for OAuth callbacks.
+func WithAPIBaseURL(url string) Option {
 	return func(c *Config) error {
 		if url == "" {
-			return errors.New("base URL cannot be empty")
+			return errors.New("API base URL cannot be empty")
 		}
 
-		c.baseURL = url
+		c.apiBaseURL = url
+
+		return nil
+	}
+}
+
+// WithFrontendBaseURL sets the frontend base URL for generated links.
+func WithFrontendBaseURL(url string) Option {
+	return func(c *Config) error {
+		if url == "" {
+			return errors.New("frontend base URL cannot be empty")
+		}
+
+		c.frontendBaseURL = url
 
 		return nil
 	}
@@ -157,8 +172,11 @@ func (c *Config) DatabaseURL() string { return c.databaseURL }
 // ResendAPIKey returns the Resend API key.
 func (c *Config) ResendAPIKey() string { return c.resendAPIKey }
 
-// BaseURL returns the base URL for generated links.
-func (c *Config) BaseURL() string { return c.baseURL }
+// APIBaseURL returns the API base URL for OAuth callbacks.
+func (c *Config) APIBaseURL() string { return c.apiBaseURL }
+
+// FrontendBaseURL returns the frontend base URL for generated links.
+func (c *Config) FrontendBaseURL() string { return c.frontendBaseURL }
 
 // FromEmail returns the sender email address.
 func (c *Config) FromEmail() string { return c.fromEmail }
@@ -203,7 +221,8 @@ func Load(opts ...Option) (*Config, error) {
 		port:            envOrDefault("PORT", defaultPort),
 		databaseURL:     envOrDefault("DATABASE_URL", defaultDatabaseURL),
 		resendAPIKey:    os.Getenv("RESEND_API_KEY"),
-		baseURL:         envOrDefault("BASE_URL", defaultBaseURL),
+		apiBaseURL:      envOrDefault("API_BASE_URL", defaultAPIBaseURL),
+		frontendBaseURL: envOrDefault("FRONTEND_BASE_URL", defaultFrontendBaseURL),
 		fromEmail:       envOrDefault("FROM_EMAIL", defaultFromEmail),
 		secretExpiry:    defaultSecretExpiry,
 		cleanupInterval: defaultCleanupInterval,

@@ -400,7 +400,9 @@ func TestHandleGithubCallback_MissingState(t *testing.T) {
 	}
 }
 
-func TestHandleGithubCallback_CodeExchangeFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGithubCallback_CodeExchangeFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport that fails the token exchange.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -462,7 +464,9 @@ func TestHandleGithubCallback_CodeExchangeFailure(t *testing.T) { //nolint:paral
 	}
 }
 
-func TestHandleGithubCallback_FetchUserInfoFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGithubCallback_FetchUserInfoFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: token exchange succeeds but /user returns non-200.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -534,7 +538,9 @@ func TestHandleGithubCallback_FetchUserInfoFailure(t *testing.T) { //nolint:para
 	}
 }
 
-func TestHandleGithubCallback_FetchUserInfoBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGithubCallback_FetchUserInfoBadJSON(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: token exchange succeeds, /user returns invalid JSON.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -762,7 +768,9 @@ func TestHandleGithubCallback_EmailBadJSON(t *testing.T) { //nolint:paralleltest
 	}
 }
 
-func TestHandleGithubCallback_NoPrimaryVerifiedEmail(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGithubCallback_NoPrimaryVerifiedEmail(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: /user returns empty email, /user/emails returns no primary verified email.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -924,7 +932,9 @@ func TestHandleGithubCallback_UpsertFailure(t *testing.T) { //nolint:paralleltes
 	}
 }
 
-func TestHandleGithubCallback_NameFallbackToLogin(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGithubCallback_NameFallbackToLogin(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: /user returns empty name, Login should be used.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {

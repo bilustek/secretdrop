@@ -399,7 +399,9 @@ type errorResponse struct {
 	} `json:"error"`
 }
 
-func TestHandleGoogleCallback_CodeExchangeFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGoogleCallback_CodeExchangeFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport that fails the token exchange.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -462,7 +464,9 @@ func TestHandleGoogleCallback_CodeExchangeFailure(t *testing.T) { //nolint:paral
 	}
 }
 
-func TestHandleGoogleCallback_FetchUserInfoFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGoogleCallback_FetchUserInfoFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: token exchange succeeds but userinfo fails.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -615,7 +619,9 @@ func TestHandleGoogleCallback_UpsertFailure(t *testing.T) { //nolint:paralleltes
 	}
 }
 
-func TestHandleGoogleCallback_FetchUserInfoBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleGoogleCallback_FetchUserInfoBadJSON(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: token exchange succeeds, userinfo returns invalid JSON.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {

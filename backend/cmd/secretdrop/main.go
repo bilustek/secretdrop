@@ -103,7 +103,7 @@ func Run() error {
 
 	svc, err := service.New(
 		repo, sender,
-		service.WithBaseURL(cfg.BaseURL()),
+		service.WithBaseURL(cfg.FrontendBaseURL()),
 		service.WithFromEmail(cfg.FromEmail()),
 		service.WithExpiry(cfg.SecretExpiry()),
 		service.WithUserRepo(userRepo),
@@ -124,12 +124,12 @@ func Run() error {
 	googleCfg := auth.GoogleConfig(
 		cfg.GoogleClientID(),
 		cfg.GoogleClientSecret(),
-		cfg.BaseURL()+"/auth/google/callback",
+		cfg.APIBaseURL()+"/auth/google/callback",
 	)
 	githubCfg := auth.GithubConfig(
 		cfg.GithubClientID(),
 		cfg.GithubClientSecret(),
-		cfg.BaseURL()+"/auth/github/callback",
+		cfg.APIBaseURL()+"/auth/github/callback",
 	)
 
 	mux.HandleFunc("GET /auth/google", authSvc.HandleGoogleLogin(googleCfg))
@@ -212,8 +212,8 @@ func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *use
 		cfg.StripeWebhookSecret(),
 		cfg.StripePriceID(),
 		userRepo,
-		billing.WithSuccessURL(cfg.BaseURL()+"/billing/success"),
-		billing.WithCancelURL(cfg.BaseURL()+"/billing/cancel"),
+		billing.WithSuccessURL(cfg.FrontendBaseURL()+"/billing/success"),
+		billing.WithCancelURL(cfg.FrontendBaseURL()+"/billing/cancel"),
 	)
 	if err != nil {
 		return fmt.Errorf("create billing service: %w", err)

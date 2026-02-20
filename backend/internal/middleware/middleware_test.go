@@ -175,4 +175,3 @@ func TestLogging_DefaultsToOK(t *testing.T) {
 		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
 	}
 }
-

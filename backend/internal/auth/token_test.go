@@ -290,7 +290,9 @@ func TestHandleTokenExchange_InvalidBody(t *testing.T) {
 	}
 }
 
-func TestHandleTokenExchange_Google_TokenVerifyFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Google_TokenVerifyFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock Google tokeninfo endpoint returning non-200.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -343,7 +345,9 @@ func TestHandleTokenExchange_Google_TokenVerifyFailure(t *testing.T) { //nolint:
 	}
 }
 
-func TestHandleTokenExchange_Google_TokenInfoBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Google_TokenInfoBadJSON(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock Google tokeninfo endpoint returning invalid JSON.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -388,7 +392,9 @@ func TestHandleTokenExchange_Google_TokenInfoBadJSON(t *testing.T) { //nolint:pa
 	}
 }
 
-func TestHandleTokenExchange_Google_AudienceMismatch(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Google_AudienceMismatch(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock Google tokeninfo returning a different audience.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -448,7 +454,9 @@ func TestHandleTokenExchange_Google_AudienceMismatch(t *testing.T) { //nolint:pa
 	}
 }
 
-func TestHandleTokenExchange_Google_UpsertFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Google_UpsertFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock Google tokeninfo endpoint returning valid response.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -509,7 +517,9 @@ func TestHandleTokenExchange_Google_UpsertFailure(t *testing.T) { //nolint:paral
 	}
 }
 
-func TestHandleTokenExchange_Github_FetchUserInfoFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Github_FetchUserInfoFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: GitHub /user returns non-200.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -562,7 +572,9 @@ func TestHandleTokenExchange_Github_FetchUserInfoFailure(t *testing.T) { //nolin
 	}
 }
 
-func TestHandleTokenExchange_Github_EmailFetchFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Github_EmailFetchFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: /user returns empty email, /user/emails returns non-200.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -629,7 +641,9 @@ func TestHandleTokenExchange_Github_EmailFetchFailure(t *testing.T) { //nolint:p
 	}
 }
 
-func TestHandleTokenExchange_Github_UpsertFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Github_UpsertFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: /user returns valid user info.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -691,7 +705,9 @@ func TestHandleTokenExchange_Github_UpsertFailure(t *testing.T) { //nolint:paral
 	}
 }
 
-func TestHandleTokenExchange_Github_NameFallbackToLogin(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Github_NameFallbackToLogin(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: /user returns empty name, so Login should be used as fallback.
 	mockTransport := &mockRoundTripper{
 		handler: func(req *http.Request) (*http.Response, error) {
@@ -752,7 +768,9 @@ func TestHandleTokenExchange_Github_NameFallbackToLogin(t *testing.T) { //nolint
 	}
 }
 
-func TestHandleTokenExchange_Google_TransportError(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleTokenExchange_Google_TransportError(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	// Mock transport: returns a network error for tokeninfo.
 	mockTransport := &mockRoundTripper{
 		handler: func(_ *http.Request) (*http.Response, error) {

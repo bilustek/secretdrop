@@ -28,8 +28,12 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("DatabaseURL() = %q; want default", cfg.DatabaseURL())
 	}
 
-	if cfg.BaseURL() != "http://localhost:3000" {
-		t.Errorf("BaseURL() = %q; want default", cfg.BaseURL())
+	if cfg.APIBaseURL() != "http://localhost:8080" {
+		t.Errorf("APIBaseURL() = %q; want default", cfg.APIBaseURL())
+	}
+
+	if cfg.FrontendBaseURL() != "http://localhost:3000" {
+		t.Errorf("FrontendBaseURL() = %q; want default", cfg.FrontendBaseURL())
 	}
 
 	if cfg.FromEmail() != "SecretDrop <noreply@secretdrop.us>" {
@@ -82,7 +86,8 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_URL", "file:test.db")
 	t.Setenv("RESEND_API_KEY", "re_test_key")
-	t.Setenv("BASE_URL", "https://example.com")
+	t.Setenv("API_BASE_URL", "https://api.example.com")
+	t.Setenv("FRONTEND_BASE_URL", "https://example.com")
 	t.Setenv("FROM_EMAIL", "test@example.com")
 	t.Setenv("SECRET_EXPIRY", "30m")
 	t.Setenv("CLEANUP_INTERVAL", "5m")
@@ -112,8 +117,12 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 		t.Errorf("ResendAPIKey() = %q; want %q", cfg.ResendAPIKey(), "re_test_key")
 	}
 
-	if cfg.BaseURL() != "https://example.com" {
-		t.Errorf("BaseURL() = %q; want %q", cfg.BaseURL(), "https://example.com")
+	if cfg.APIBaseURL() != "https://api.example.com" {
+		t.Errorf("APIBaseURL() = %q; want %q", cfg.APIBaseURL(), "https://api.example.com")
+	}
+
+	if cfg.FrontendBaseURL() != "https://example.com" {
+		t.Errorf("FrontendBaseURL() = %q; want %q", cfg.FrontendBaseURL(), "https://example.com")
 	}
 
 	if cfg.FromEmail() != "test@example.com" {
@@ -347,27 +356,51 @@ func TestWithResendAPIKeyEmpty(t *testing.T) {
 	}
 }
 
-func TestWithBaseURL(t *testing.T) {
+func TestWithAPIBaseURL(t *testing.T) {
 	t.Setenv("GOLANG_ENV", "development")
 	t.Setenv("RESEND_API_KEY", "")
 
-	cfg, err := config.Load(config.WithBaseURL("https://custom.com"))
+	cfg, err := config.Load(config.WithAPIBaseURL("https://api.custom.com"))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.BaseURL() != "https://custom.com" {
-		t.Errorf("BaseURL() = %q; want %q", cfg.BaseURL(), "https://custom.com")
+	if cfg.APIBaseURL() != "https://api.custom.com" {
+		t.Errorf("APIBaseURL() = %q; want %q", cfg.APIBaseURL(), "https://api.custom.com")
 	}
 }
 
-func TestWithBaseURLEmpty(t *testing.T) {
+func TestWithAPIBaseURLEmpty(t *testing.T) {
 	t.Setenv("GOLANG_ENV", "development")
 	t.Setenv("RESEND_API_KEY", "")
 
-	_, err := config.Load(config.WithBaseURL(""))
+	_, err := config.Load(config.WithAPIBaseURL(""))
 	if err == nil {
-		t.Fatal("WithBaseURL('') should fail")
+		t.Fatal("WithAPIBaseURL('') should fail")
+	}
+}
+
+func TestWithFrontendBaseURL(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("RESEND_API_KEY", "")
+
+	cfg, err := config.Load(config.WithFrontendBaseURL("https://custom.com"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.FrontendBaseURL() != "https://custom.com" {
+		t.Errorf("FrontendBaseURL() = %q; want %q", cfg.FrontendBaseURL(), "https://custom.com")
+	}
+}
+
+func TestWithFrontendBaseURLEmpty(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("RESEND_API_KEY", "")
+
+	_, err := config.Load(config.WithFrontendBaseURL(""))
+	if err == nil {
+		t.Fatal("WithFrontendBaseURL('') should fail")
 	}
 }
 
