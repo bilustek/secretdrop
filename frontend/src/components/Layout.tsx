@@ -29,6 +29,15 @@ export function Layout() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [menuOpen])
 
+  useEffect(() => {
+    if (!deleteModalOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeleteModalOpen(false)
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [deleteModalOpen])
+
   const handleManageBilling = async () => {
     setMenuOpen(false)
     try {
@@ -143,9 +152,6 @@ export function Layout() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setDeleteModalOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setDeleteModalOpen(false)
-          }}
           role="presentation"
         >
           <div

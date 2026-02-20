@@ -1,4 +1,4 @@
-import { use } from "react"
+import { use, useEffect, useState } from "react"
 import { Navigate } from "react-router"
 import { Shield, Mail, Flame } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
@@ -24,6 +24,17 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export default function Landing() {
   const auth = use(AuthContext)
+
+  const [signInOpen, setSignInOpen] = useState(false)
+
+  useEffect(() => {
+    if (!signInOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSignInOpen(false)
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [signInOpen])
 
   if (auth?.isAuthenticated) {
     return <Navigate to="/dashboard" replace />
@@ -105,12 +116,13 @@ export default function Landing() {
               <li>Up to 5 recipients</li>
               <li>AES-256-GCM encryption</li>
             </ul>
-            <a
-              href="/auth/google"
-              className="mt-6 block text-center px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            <button
+              type="button"
+              onClick={() => setSignInOpen(true)}
+              className="mt-6 block w-full text-center px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
             >
               Get Started
-            </a>
+            </button>
           </div>
           <div className="border-2 border-gray-900 dark:border-white rounded-xl p-6 relative">
             <span className="absolute -top-3 left-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium px-2 py-1 rounded">
@@ -124,15 +136,48 @@ export default function Landing() {
               <li>Up to 5 recipients</li>
               <li>AES-256-GCM encryption</li>
             </ul>
-            <a
-              href="/auth/google"
-              className="mt-6 block text-center px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
+            <button
+              type="button"
+              onClick={() => setSignInOpen(true)}
+              className="mt-6 block w-full text-center px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
             >
               Start Free, Upgrade Later
-            </a>
+            </button>
           </div>
         </div>
       </section>
+
+      {signInOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setSignInOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="max-w-sm w-full mx-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <h2 className="text-lg font-semibold text-center">Sign in to continue</h2>
+            <div className="mt-6 flex flex-col gap-3">
+              <a
+                href="/auth/google"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
+              >
+                <GoogleIcon className="w-5 h-5" />
+                Sign in with Google
+              </a>
+              <a
+                href="/auth/github"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+              >
+                <GitHubIcon className="w-5 h-5" />
+                Sign in with GitHub
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

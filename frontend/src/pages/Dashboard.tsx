@@ -227,7 +227,11 @@ export default function Dashboard() {
           {user.secrets_used} / {user.secrets_limit} secrets used
         </p>
         {user.tier === "free" && (
-          <button type="button" onClick={handleUpgrade} className="font-medium text-gray-900 dark:text-white hover:underline">
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            className="px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
+          >
             Upgrade to Pro
           </button>
         )}
