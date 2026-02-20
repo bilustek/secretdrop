@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/slack"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
 )
 
@@ -82,6 +83,7 @@ type Service struct {
 	successURL      string
 	cancelURL       string
 	portalReturnURL string
+	notifier        slack.Notifier
 }
 
 // New creates a new billing Service.
@@ -142,6 +144,15 @@ func WithCancelURL(url string) Option {
 func WithPortalReturnURL(url string) Option {
 	return func(s *Service) error {
 		s.portalReturnURL = url
+
+		return nil
+	}
+}
+
+// WithNotifier sets the Slack notifier for subscription events.
+func WithNotifier(n slack.Notifier) Option {
+	return func(s *Service) error {
+		s.notifier = n
 
 		return nil
 	}

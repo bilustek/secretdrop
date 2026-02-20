@@ -38,6 +38,9 @@ type Config struct {
 	stripeSecretKey     string
 	stripeWebhookSecret string
 	stripePriceID       string
+
+	slackWebhookSubscriptions string
+	slackWebhookNotifications string
 }
 
 // Option configures a Config value.
@@ -211,6 +214,12 @@ func (c *Config) StripeWebhookSecret() string { return c.stripeWebhookSecret }
 // StripePriceID returns the Stripe price ID for the subscription plan.
 func (c *Config) StripePriceID() string { return c.stripePriceID }
 
+// SlackWebhookSubscriptions returns the Slack webhook URL for subscription events.
+func (c *Config) SlackWebhookSubscriptions() string { return c.slackWebhookSubscriptions }
+
+// SlackWebhookNotifications returns the Slack webhook URL for error notifications.
+func (c *Config) SlackWebhookNotifications() string { return c.slackWebhookNotifications }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -254,6 +263,9 @@ func Load(opts ...Option) (*Config, error) {
 	c.stripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	c.stripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 	c.stripePriceID = os.Getenv("STRIPE_PRICE_ID")
+
+	c.slackWebhookSubscriptions = os.Getenv("SLACK_WEBHOOK_SUBSCRIPTIONS")
+	c.slackWebhookNotifications = os.Getenv("SLACK_WEBHOOK_NOTIFICATIONS")
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {

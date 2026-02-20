@@ -44,7 +44,7 @@ func TestDeleteAccount_Unauthenticated(t *testing.T) {
 	t.Parallel()
 
 	repo := newTestUserRepo(t)
-	h := handler.NewDeleteAccountHandler(repo, nil)
+	h := handler.NewDeleteAccountHandler(repo, nil, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me", nil)
 	rec := httptest.NewRecorder()
@@ -73,7 +73,7 @@ func TestDeleteAccount_Success(t *testing.T) {
 	}
 
 	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: model.TierFree}
-	h := handler.NewDeleteAccountHandler(repo, nil)
+	h := handler.NewDeleteAccountHandler(repo, nil, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me", nil)
 	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))
@@ -120,7 +120,7 @@ func TestDeleteAccount_CancelsStripeSubscription(t *testing.T) {
 
 	canceller := &mockCanceller{}
 	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: model.TierPro}
-	h := handler.NewDeleteAccountHandler(repo, canceller)
+	h := handler.NewDeleteAccountHandler(repo, canceller, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me", nil)
 	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))
@@ -158,7 +158,7 @@ func TestDeleteAccount_NotFound(t *testing.T) {
 
 	repo := newTestUserRepo(t)
 	claims := &auth.Claims{UserID: 99999, Email: "ghost@example.com", Tier: model.TierFree}
-	h := handler.NewDeleteAccountHandler(repo, nil)
+	h := handler.NewDeleteAccountHandler(repo, nil, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me", nil)
 	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))

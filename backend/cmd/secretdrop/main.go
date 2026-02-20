@@ -25,6 +25,11 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
+	slackpkg "github.com/bilusteknoloji/secretdrop/internal/slack"
+	slackconsole "github.com/bilusteknoloji/secretdrop/internal/slack/console"
+	slacknoop "github.com/bilusteknoloji/secretdrop/internal/slack/noop"
+	"github.com/bilusteknoloji/secretdrop/internal/slack/sloghandler"
+	slackwebhook "github.com/bilusteknoloji/secretdrop/internal/slack/webhook"
 	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
@@ -42,13 +47,29 @@ func main() {
 }
 
 func Run() error {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+
+	// Slack notifiers
+	var subscriptionNotifier slackpkg.Notifier
+	var errorNotifier slackpkg.Notifier
+
+	if cfg.IsDev() {
+		subscriptionNotifier = slackconsole.New()
+		errorNotifier = slackconsole.New()
+	} else {
+		subscriptionNotifier = selectNotifier(cfg.SlackWebhookSubscriptions())
+		errorNotifier = selectNotifier(cfg.SlackWebhookNotifications())
+	}
+
+	// Logger with Slack error handler
+	baseHandler := slog.NewJSONHandler(os.Stdout, nil)
+	logger := slog.New(sloghandler.New(baseHandler, errorNotifier))
+	slog.SetDefault(logger)
 
 	// Ensure database directory exists.
 	if dir := dbDir(cfg.DatabaseURL()); dir != "." && dir != "" {
@@ -145,7 +166,7 @@ func Run() error {
 	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
 
 	// Billing routes (conditional — only in non-dev mode)
-	billingSvc, billingErr := setupBilling(mux, cfg, userRepo)
+	billingSvc, billingErr := setupBilling(mux, cfg, userRepo, subscriptionNotifier)
 	if billingErr != nil {
 		return billingErr
 	}
@@ -156,7 +177,7 @@ func Run() error {
 		canceller = billingSvc
 	}
 
-	mux.HandleFunc("DELETE /api/v1/me", handler.NewDeleteAccountHandler(userRepo, canceller))
+	mux.HandleFunc("DELETE /api/v1/me", handler.NewDeleteAccountHandler(userRepo, canceller, subscriptionNotifier))
 
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
@@ -215,7 +236,12 @@ func Run() error {
 // setupBilling creates the billing service and registers Stripe routes.
 // In development mode the routes are skipped entirely since Stripe
 // credentials are not available, and nil is returned for the service.
-func setupBilling(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.Repository) (*billing.Service, error) {
+func setupBilling(
+	mux *http.ServeMux,
+	cfg *config.Config,
+	userRepo *usersqlite.Repository,
+	notifier slackpkg.Notifier,
+) (*billing.Service, error) {
 	if cfg.StripeSecretKey() == "" || cfg.StripeWebhookSecret() == "" || cfg.StripePriceID() == "" {
 		slog.Info("billing routes disabled (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, or STRIPE_PRICE_ID not set)")
 
@@ -230,6 +256,7 @@ func setupBilling(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.R
 		billing.WithSuccessURL(cfg.FrontendBaseURL()+"/billing/success"),
 		billing.WithCancelURL(cfg.FrontendBaseURL()+"/billing/cancel"),
 		billing.WithPortalReturnURL(cfg.FrontendBaseURL()+"/dashboard"),
+		billing.WithNotifier(notifier),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create billing service: %w", err)
@@ -243,6 +270,21 @@ func setupBilling(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.R
 	mux.HandleFunc("POST /billing/portal", billingSvc.HandlePortal())
 
 	return billingSvc, nil
+}
+
+func selectNotifier(webhookURL string) slackpkg.Notifier {
+	if webhookURL == "" {
+		return slacknoop.New()
+	}
+
+	n, err := slackwebhook.New(webhookURL)
+	if err != nil {
+		slog.Warn("invalid slack webhook URL, using noop notifier", "error", err)
+
+		return slacknoop.New()
+	}
+
+	return n
 }
 
 // dbDir extracts the directory from a SQLite DSN like "file:db/secretdrop.db?_journal_mode=WAL".

@@ -13,6 +13,7 @@ import (
 	"github.com/stripe/stripe-go/v82/webhook"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/slack"
 )
 
 const (
@@ -103,6 +104,21 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, event stripe.Even
 	if err := s.userRepo.UpdateTier(ctx, userID, model.TierPro); err != nil {
 		slog.Error("update user tier to pro", slogKeyError, err, slogKeyUserID, userID)
 	}
+
+	if s.notifier != nil {
+		go func() {
+			ev := slack.Event{
+				Type:    slack.EventSubscriptionCreated,
+				Message: "New subscription",
+				Fields: map[string]string{
+					"user_id": strconv.FormatInt(userID, 10),
+				},
+			}
+			if err := s.notifier.Notify(context.Background(), ev); err != nil {
+				slog.Warn("send slack notification", "error", err)
+			}
+		}()
+	}
 }
 
 func (s *Service) handleInvoicePaid(ctx context.Context, event stripe.Event) {
@@ -188,6 +204,22 @@ func (s *Service) handleSubscriptionDeleted(ctx context.Context, event stripe.Ev
 
 	if err := s.userRepo.UpdateTier(ctx, u.ID, model.TierFree); err != nil {
 		slog.Error("downgrade user to free tier", slogKeyError, err, slogKeyUserID, u.ID)
+	}
+
+	if s.notifier != nil {
+		go func() {
+			ev := slack.Event{
+				Type:    slack.EventSubscriptionCancelled,
+				Message: "Subscription cancelled",
+				Fields: map[string]string{
+					"user_id":     strconv.FormatInt(u.ID, 10),
+					"customer_id": customerID,
+				},
+			}
+			if err := s.notifier.Notify(context.Background(), ev); err != nil {
+				slog.Warn("send slack notification", "error", err)
+			}
+		}()
 	}
 }
 
