@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"net/mail"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/user"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +24,7 @@ const defaultExpiry = 10 * time.Minute
 type SecretService struct {
 	repo      repository.Repository
 	sender    email.Sender
+	userRepo  user.Repository
 	baseURL   string
 	fromEmail string
 	expiry    time.Duration
@@ -68,6 +72,15 @@ func WithExpiry(d time.Duration) Option {
 	}
 }
 
+// WithUserRepo sets the user repository for usage limit enforcement.
+func WithUserRepo(r user.Repository) Option {
+	return func(s *SecretService) error {
+		s.userRepo = r
+
+		return nil
+	}
+}
+
 // New creates a new SecretService with the given repository and email sender.
 func New(repo repository.Repository, sender email.Sender, opts ...Option) (*SecretService, error) {
 	s := &SecretService{
@@ -89,8 +102,28 @@ func New(repo repository.Repository, sender email.Sender, opts ...Option) (*Secr
 // and sends notification emails.
 func (s *SecretService) Create(
 	ctx context.Context,
+	userID int64,
 	req *model.CreateRequest,
 ) (*model.CreateResponse, error) {
+	if s.userRepo != nil {
+		u, err := s.userRepo.FindByID(ctx, userID)
+		if err != nil {
+			return nil, &model.AppError{
+				Type:       "internal_error",
+				Message:    "Failed to verify user",
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+
+		if !u.CanCreateSecret() {
+			return nil, &model.AppError{
+				Type:       "limit_reached",
+				Message:    "Secret creation limit reached",
+				StatusCode: http.StatusForbidden,
+			}
+		}
+	}
+
 	if err := validateCreateRequest(req); err != nil {
 		return nil, err
 	}
@@ -106,6 +139,13 @@ func (s *SecretService) Create(
 		}
 
 		recipients = append(recipients, *link)
+	}
+
+	if s.userRepo != nil {
+		if err := s.userRepo.IncrementSecretsUsed(ctx, userID); err != nil {
+			slog.Error("increment secrets used", "error", err, "user_id", userID)
+			// Don't fail the request — the secret was already created
+		}
 	}
 
 	return &model.CreateResponse{

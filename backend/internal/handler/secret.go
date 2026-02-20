@@ -34,7 +34,7 @@ func (h *SecretHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.svc.Create(r.Context(), &req)
+	resp, err := h.svc.Create(r.Context(), 0, &req)
 	if err != nil {
 		handleServiceError(w, err)
 

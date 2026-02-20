@@ -10,6 +10,7 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
+	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
 func newTestService(t *testing.T) (*service.SecretService, *sqlite.Repository, *noop.Sender) {
@@ -62,7 +63,7 @@ func TestCreateAndRevealSecret(t *testing.T) {
 		To:   []string{"alice@example.com"},
 	}
 
-	resp, err := svc.Create(ctx, req)
+	resp, err := svc.Create(ctx, 0, req)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -104,7 +105,7 @@ func TestRevealDeletesSecret(t *testing.T) {
 	svc, _, _ := newTestService(t)
 	ctx := context.Background()
 
-	resp, err := svc.Create(ctx, &model.CreateRequest{
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
 		Text: "one-time-secret",
 		To:   []string{"bob@example.com"},
 	})
@@ -141,7 +142,7 @@ func TestRevealWithWrongEmail(t *testing.T) {
 	svc, _, _ := newTestService(t)
 	ctx := context.Background()
 
-	resp, err := svc.Create(ctx, &model.CreateRequest{
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
 		Text: "classified",
 		To:   []string{"correct@example.com"},
 	})
@@ -170,7 +171,7 @@ func TestCreateMultipleRecipients(t *testing.T) {
 		To:   []string{"a@example.com", "b@example.com", "c@example.com"},
 	}
 
-	resp, err := svc.Create(ctx, req)
+	resp, err := svc.Create(ctx, 0, req)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -250,7 +251,7 @@ func TestCreateValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, createErr := svc.Create(ctx, tt.req)
+			_, createErr := svc.Create(ctx, 0, tt.req)
 			if createErr == nil {
 				t.Fatal("Create() should return error")
 			}
@@ -291,7 +292,7 @@ func TestRevealExpiredSecret(t *testing.T) {
 
 	ctx := context.Background()
 
-	resp, err := svc.Create(ctx, &model.CreateRequest{
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
 		Text: "will-expire",
 		To:   []string{"test@example.com"},
 	})
@@ -314,5 +315,164 @@ func TestRevealExpiredSecret(t *testing.T) {
 		if appErr.Type != "expired" {
 			t.Errorf("error type = %q; want %q", appErr.Type, "expired")
 		}
+	}
+}
+
+func newTestServiceWithUserRepo(t *testing.T) (*service.SecretService, *usersqlite.Repository) {
+	t.Helper()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { userRepo.Close() })
+
+	sender := noop.New()
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+		service.WithUserRepo(userRepo),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	return svc, userRepo
+}
+
+func TestCreate_FreeTierLimitReached(t *testing.T) {
+	t.Parallel()
+
+	svc, userRepo := newTestServiceWithUserRepo(t)
+	ctx := context.Background()
+
+	u, err := userRepo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "free-user-1",
+		Email:      "free@example.com",
+		Name:       "Free User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	// Set secrets_used to the free tier limit (1)
+	if err := userRepo.IncrementSecretsUsed(ctx, u.ID); err != nil {
+		t.Fatalf("IncrementSecretsUsed() error = %v", err)
+	}
+
+	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"recipient@example.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error when limit reached")
+	}
+
+	appErr, ok := createErr.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", createErr)
+	}
+
+	if appErr.Type != "limit_reached" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "limit_reached")
+	}
+
+	if appErr.StatusCode != 403 {
+		t.Errorf("status code = %d; want 403", appErr.StatusCode)
+	}
+}
+
+func TestCreate_ProTierLimitReached(t *testing.T) {
+	t.Parallel()
+
+	svc, userRepo := newTestServiceWithUserRepo(t)
+	ctx := context.Background()
+
+	u, err := userRepo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "pro-user-1",
+		Email:      "pro@example.com",
+		Name:       "Pro User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	if err := userRepo.UpdateTier(ctx, u.ID, model.TierPro); err != nil {
+		t.Fatalf("UpdateTier() error = %v", err)
+	}
+
+	// Set secrets_used to the pro tier limit (100)
+	for range model.ProTierLimit {
+		if err := userRepo.IncrementSecretsUsed(ctx, u.ID); err != nil {
+			t.Fatalf("IncrementSecretsUsed() error = %v", err)
+		}
+	}
+
+	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"recipient@example.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error when limit reached")
+	}
+
+	appErr, ok := createErr.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", createErr)
+	}
+
+	if appErr.Type != "limit_reached" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "limit_reached")
+	}
+
+	if appErr.StatusCode != 403 {
+		t.Errorf("status code = %d; want 403", appErr.StatusCode)
+	}
+}
+
+func TestCreate_IncrementsUsage(t *testing.T) {
+	t.Parallel()
+
+	svc, userRepo := newTestServiceWithUserRepo(t)
+	ctx := context.Background()
+
+	u, err := userRepo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "usage-user-1",
+		Email:      "usage@example.com",
+		Name:       "Usage User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"recipient@example.com"},
+	})
+	if createErr != nil {
+		t.Fatalf("Create() error = %v", createErr)
+	}
+
+	updated, err := userRepo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	if updated.SecretsUsed != 1 {
+		t.Errorf("SecretsUsed = %d; want 1", updated.SecretsUsed)
 	}
 }
