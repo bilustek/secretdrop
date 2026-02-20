@@ -8,6 +8,7 @@
 *.out
 vendor/
 backend/secretdrop
+*.db
 
 # Node.js
 node_modules/
