@@ -40,4 +40,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: bilusteknoloji/secretdrop
-          file: backend/coverage.txt
+          files: backend/coverage.txt
