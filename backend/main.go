@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
 	"github.com/bilusteknoloji/secretdrop/internal/config"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
@@ -110,7 +111,7 @@ func main() {
 	cleanupWorker.Start()
 
 	go func() {
-		slog.Info("server starting", "addr", addr)
+		slog.Info("server starting", "addr", addr, "version", appinfo.Version)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server failed", logKeyError, err)

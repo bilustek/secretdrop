@@ -19,7 +19,6 @@ func TestSendReturnsNil(t *testing.T) {
 
 	sender := console.New()
 	err := sender.Send(context.Background(), "test@example.com", "Test Subject", "<p>Hello</p>")
-
 	if err != nil {
 		t.Fatalf("Send() error = %v; want nil", err)
 	}

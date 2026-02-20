@@ -68,6 +68,10 @@ func TestHealthz(t *testing.T) {
 	if resp["status"] != "ok" {
 		t.Errorf("status = %q; want %q", resp["status"], "ok")
 	}
+
+	if resp["version"] == "" {
+		t.Error("version should be present in healthz response")
+	}
 }
 
 func TestCreateSecret(t *testing.T) {

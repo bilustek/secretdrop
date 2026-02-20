@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
@@ -70,7 +71,10 @@ func (h *SecretHandler) Reveal(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"version": appinfo.Version,
+	})
 }
 
 func handleServiceError(w http.ResponseWriter, err error) {
