@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -142,7 +141,7 @@ func (s *Service) HandleGoogleCallback(cfg *oauth2.Config, userRepo user.Reposit
 			return
 		}
 
-		s.redirectWithTokens(w, r, pair)
+		writeJSON(w, http.StatusOK, pair)
 	}
 }
 
@@ -177,20 +176,6 @@ func generateState() (string, error) {
 	}
 
 	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-// redirectWithTokens redirects the browser to the frontend callback page
-// with access and refresh tokens as query parameters.
-func (s *Service) redirectWithTokens(w http.ResponseWriter, r *http.Request, pair *TokenPair) {
-	u, _ := url.Parse(s.frontendBaseURL)
-	u.Path = "/auth/callback"
-
-	q := u.Query()
-	q.Set("access_token", pair.AccessToken)
-	q.Set("refresh_token", pair.RefreshToken)
-	u.RawQuery = q.Encode()
-
-	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 }
 
 // writeJSON is a small helper for auth handlers (not exported, auth-package only).
