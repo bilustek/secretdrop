@@ -9,7 +9,7 @@ const (
 	TierPro = "pro"
 
 	// FreeTierLimit is the maximum number of secrets a free user can create.
-	FreeTierLimit = 1
+	FreeTierLimit = 5
 	// ProTierLimit is the maximum number of secrets a pro user can create.
 	ProTierLimit = 100
 )

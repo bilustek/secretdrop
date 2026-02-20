@@ -367,9 +367,11 @@ func TestCreate_FreeTierLimitReached(t *testing.T) {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	// Set secrets_used to the free tier limit (1)
-	if err := userRepo.IncrementSecretsUsed(ctx, u.ID); err != nil {
-		t.Fatalf("IncrementSecretsUsed() error = %v", err)
+	// Set secrets_used to the free tier limit
+	for range model.FreeTierLimit {
+		if err := userRepo.IncrementSecretsUsed(ctx, u.ID); err != nil {
+			t.Fatalf("IncrementSecretsUsed() error = %v", err)
+		}
 	}
 
 	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
