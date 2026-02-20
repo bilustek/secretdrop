@@ -92,8 +92,8 @@ func Run() error {
 
 	var sender email.Sender
 	if cfg.IsDev() {
-		sender = console.New()
-		slog.Info("development mode: emails will be logged to console")
+		sender = console.New(console.WithFrom(cfg.FromEmail()))
+		slog.Info("development mode: emails will be printed to stderr")
 	} else {
 		sender, err = resend.New(cfg.ResendAPIKey(), resend.WithFrom(cfg.FromEmail()))
 		if err != nil {
@@ -201,8 +201,8 @@ func Run() error {
 // routes. In development mode the routes are skipped entirely since Stripe
 // credentials are not available.
 func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.Repository) error {
-	if cfg.IsDev() {
-		slog.Info("development mode: billing routes disabled")
+	if cfg.StripeSecretKey() == "" || cfg.StripeWebhookSecret() == "" || cfg.StripePriceID() == "" {
+		slog.Info("billing routes disabled (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, or STRIPE_PRICE_ID not set)")
 
 		return nil
 	}

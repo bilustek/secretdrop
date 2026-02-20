@@ -2,25 +2,74 @@ package console
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
+	"os"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 )
 
+const separator = "-------------------------------------------------------------------------------"
+
 // compile-time interface check.
 var _ email.Sender = (*Sender)(nil)
 
-// Sender logs emails to the console via slog instead of sending them.
-type Sender struct{}
-
-// New creates a new console email sender for development use.
-func New() *Sender {
-	return &Sender{}
+// Sender logs emails to the console in RFC 2822-like format (similar to
+// Django's console email backend) instead of actually sending them.
+type Sender struct {
+	from string
 }
 
-// Send logs the email details to the console.
-func (*Sender) Send(_ context.Context, to, subject, html string) error {
-	slog.Info("email sent (dev mode)", "to", to, "subject", subject, "html", html)
+// Option configures a Sender value.
+type Option func(*Sender)
+
+// WithFrom sets the sender email address shown in the output.
+func WithFrom(from string) Option {
+	return func(s *Sender) {
+		s.from = from
+	}
+}
+
+// New creates a new console email sender for development use.
+func New(opts ...Option) *Sender {
+	s := &Sender{
+		from: "webmaster@localhost",
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
+}
+
+// Send prints the email to stderr in an RFC 2822-like format.
+func (s *Sender) Send(_ context.Context, to, subject, body string) error {
+	hostname, _ := os.Hostname()
+
+	msg := fmt.Sprintf(`%s
+Content-Type: text/html; charset="utf-8"
+MIME-Version: 1.0
+Subject: %s
+From: %s
+To: %s
+Date: %s
+Message-ID: <%d@%s>
+
+%s
+%s`,
+		separator,
+		subject,
+		s.from,
+		to,
+		time.Now().Format(time.RFC1123Z),
+		time.Now().UnixNano(),
+		hostname,
+		body,
+		separator,
+	)
+
+	fmt.Fprintln(os.Stderr, msg)
 
 	return nil
 }
