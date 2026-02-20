@@ -28,7 +28,7 @@ func (e *AppError) Error() string {
 
 // Sentinel errors for the secret lifecycle.
 var (
-	ErrNotFound      = errors.New("secret not found")
+	ErrNotFound      = errors.New("not found")
 	ErrExpired       = errors.New("secret has expired")
 	ErrAlreadyViewed = errors.New("secret has already been viewed")
 	ErrEmailMismatch = errors.New("email does not match")

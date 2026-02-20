@@ -47,6 +47,13 @@ type webhookUserRepo struct {
 	resetSecretsUsedUserID int64
 	resetSecretsUsedErr    error
 
+	// updateSubscriptionPeriod
+	updateSubPeriodCalled bool
+	updateSubPeriodSubID  string
+	updateSubPeriodStart  time.Time
+	updateSubPeriodEnd    time.Time
+	updateSubPeriodErr    error
+
 	// subscription lookup
 	subscription    *model.Subscription
 	subscriptionErr error
@@ -104,6 +111,19 @@ func (m *webhookUserRepo) UpdateSubscriptionStatus(_ context.Context, subID, sta
 	m.updateSubStatusStatus = status
 
 	return m.updateSubStatusErr
+}
+
+func (m *webhookUserRepo) UpdateSubscriptionPeriod(_ context.Context, subID string, start, end time.Time) error {
+	m.updateSubPeriodCalled = true
+	m.updateSubPeriodSubID = subID
+	m.updateSubPeriodStart = start
+	m.updateSubPeriodEnd = end
+
+	return m.updateSubPeriodErr
+}
+
+func (m *webhookUserRepo) DeleteUser(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
 }
 
 const (

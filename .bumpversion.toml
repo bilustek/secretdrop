@@ -28,3 +28,9 @@ filename = "backend/internal/appinfo/version.go"
 
 [[tool.bumpversion.files]]
 filename = "backend/docs/openapi.yaml"
+
+[[tool.bumpversion.files]]
+filename = "frontend/package.json"
+
+[[tool.bumpversion.files]]
+filename = "frontend/src/version.ts"

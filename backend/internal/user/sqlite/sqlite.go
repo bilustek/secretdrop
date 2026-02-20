@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
@@ -242,6 +243,41 @@ func (r *Repository) UpdateTier(ctx context.Context, id int64, tier string) erro
 	return nil
 }
 
+// DeleteUser deletes a user and their subscriptions within a transaction.
+// Returns model.ErrNotFound if no user exists with the given ID.
+func (r *Repository) DeleteUser(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	defer func() { _ = tx.Rollback() }()
+
+	if _, execErr := tx.ExecContext(ctx, "DELETE FROM subscriptions WHERE user_id = ?", id); execErr != nil {
+		return fmt.Errorf("delete subscriptions: %w", execErr)
+	}
+
+	result, err := tx.ExecContext(ctx, "DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return fmt.Errorf("commit tx: %w", commitErr)
+	}
+
+	return nil
+}
+
 // UpsertSubscription inserts a new subscription or updates an existing one matched by stripe_subscription_id.
 func (r *Repository) UpsertSubscription(ctx context.Context, sub *model.Subscription) error {
 	const query = `
@@ -351,6 +387,31 @@ func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, stripeSubID, 
 	result, err := r.db.ExecContext(ctx, query, status, stripeSubID)
 	if err != nil {
 		return fmt.Errorf("update subscription status: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpdateSubscriptionPeriod updates the current billing period for a subscription
+// identified by its Stripe subscription ID.
+// Returns model.ErrNotFound if no subscription exists with the given ID.
+func (r *Repository) UpdateSubscriptionPeriod(ctx context.Context, stripeSubID string, start, end time.Time) error {
+	const query = `UPDATE subscriptions
+		SET current_period_start = ?, current_period_end = ?
+		WHERE stripe_subscription_id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, start, end, stripeSubID)
+	if err != nil {
+		return fmt.Errorf("update subscription period: %w", err)
 	}
 
 	n, err := result.RowsAffected()

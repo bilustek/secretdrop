@@ -678,3 +678,66 @@ func TestUpdateSubscriptionStatus_NotFound(t *testing.T) {
 		t.Errorf("UpdateSubscriptionStatus() error = %v; want model.ErrNotFound", err)
 	}
 }
+
+func TestDeleteUser(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, sub := createTestUserAndSubscription(t, repo)
+
+	if err := repo.DeleteUser(ctx, u.ID); err != nil {
+		t.Fatalf("DeleteUser() error = %v", err)
+	}
+
+	// User should be gone.
+	_, err := repo.FindByID(ctx, u.ID)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("FindByID() after delete: error = %v; want model.ErrNotFound", err)
+	}
+
+	// Subscription should be gone too.
+	_, err = repo.FindSubscriptionByUserID(ctx, sub.UserID)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("FindSubscriptionByUserID() after delete: error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestDeleteUser_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.DeleteUser(ctx, 99999)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("DeleteUser() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestDeleteUser_WithoutSubscription(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-delnosub",
+		Email:      "delnosub@example.com",
+		Name:       "No Sub",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	if err := repo.DeleteUser(ctx, u.ID); err != nil {
+		t.Fatalf("DeleteUser() error = %v", err)
+	}
+
+	_, findErr := repo.FindByID(ctx, u.ID)
+	if !errors.Is(findErr, model.ErrNotFound) {
+		t.Errorf("FindByID() after delete: error = %v; want model.ErrNotFound", findErr)
+	}
+}

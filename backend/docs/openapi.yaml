@@ -40,8 +40,9 @@ paths:
         The link format is `{baseURL}/s/{token}#{base64url-key}`.
         The fragment (`#key`) is never sent to the server.
 
-        Requires authentication. Free tier allows 1 secret (lifetime),
-        Pro tier allows 100 secrets per month.
+        Requires authentication. Free tier allows 5 secrets (lifetime)
+        with 1 recipient per secret. Pro tier allows 100 secrets per month
+        with up to 5 recipients per secret.
       security:
         - bearerAuth: []
       requestBody:
@@ -225,6 +226,68 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: deleteAccount
+      summary: Delete authenticated user account
+      description: |
+        Permanently deletes the authenticated user's account. If the user has
+        an active Stripe subscription, it is cancelled. Subscription and user
+        records are removed from the database. Previously shared secrets are
+        not linked to accounts and will expire on their original schedule.
+
+        This action is irreversible.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Account deleted
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/contact:
+    post:
+      operationId: sendContact
+      summary: Send a contact form message
+      description: |
+        Sends a contact message to the support team. No authentication required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactRequest"
+            example:
+              name: "Jane Doe"
+              email: "jane@example.com"
+              message: "I have a question about the Pro plan."
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "sent"
+        "400":
+          description: Validation error (missing fields or invalid email)
           content:
             application/json:
               schema:
@@ -483,7 +546,7 @@ components:
             format: email
           minItems: 1
           maxItems: 5
-          description: Recipient email addresses (max 5)
+          description: Recipient email addresses (free tier: max 1, pro tier: max 5)
 
     CreateResponse:
       type: object
@@ -587,6 +650,24 @@ components:
           type: string
           format: uri
           description: URL to redirect the user to
+
+    ContactRequest:
+      type: object
+      required:
+        - name
+        - email
+        - message
+      properties:
+        name:
+          type: string
+          description: Sender's name
+        email:
+          type: string
+          format: email
+          description: Sender's email address
+        message:
+          type: string
+          description: Contact message
 
     ErrorResponse:
       type: object

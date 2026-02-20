@@ -9,7 +9,7 @@ const (
 	TierPro = "pro"
 
 	// FreeTierLimit is the maximum number of secrets a free user can create.
-	FreeTierLimit = 1
+	FreeTierLimit = 5
 	// ProTierLimit is the maximum number of secrets a pro user can create.
 	ProTierLimit = 100
 )
@@ -42,4 +42,14 @@ func (u *User) SecretsLimit() int {
 // secret creation limit.
 func (u *User) CanCreateSecret() bool {
 	return u.SecretsUsed < u.SecretsLimit()
+}
+
+// RecipientsLimit returns the maximum number of recipients per secret
+// based on the user's tier.
+func (u *User) RecipientsLimit() int {
+	if u.Tier == TierPro {
+		return ProMaxRecipients
+	}
+
+	return FreeMaxRecipients
 }

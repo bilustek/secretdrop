@@ -105,6 +105,8 @@ func (s *SecretService) Create(
 	userID int64,
 	req *model.CreateRequest,
 ) (*model.CreateResponse, error) {
+	maxRecipients := model.ProMaxRecipients
+
 	if s.userRepo != nil {
 		u, err := s.userRepo.FindByID(ctx, userID)
 		if err != nil {
@@ -122,9 +124,11 @@ func (s *SecretService) Create(
 				StatusCode: http.StatusForbidden,
 			}
 		}
+
+		maxRecipients = u.RecipientsLimit()
 	}
 
-	if err := validateCreateRequest(req); err != nil {
+	if err := validateCreateRequest(req, maxRecipients); err != nil {
 		return nil, err
 	}
 
@@ -275,7 +279,7 @@ func (s *SecretService) createForRecipient(
 	}, nil
 }
 
-func validateCreateRequest(req *model.CreateRequest) error {
+func validateCreateRequest(req *model.CreateRequest, maxRecipients int) error {
 	if len(req.Text) == 0 {
 		return &model.AppError{
 			Type:       "validation_error",
@@ -300,10 +304,10 @@ func validateCreateRequest(req *model.CreateRequest) error {
 		}
 	}
 
-	if len(req.To) > model.MaxRecipients {
+	if len(req.To) > maxRecipients {
 		return &model.AppError{
 			Type:       "too_many_recipients",
-			Message:    "Maximum 5 recipients allowed",
+			Message:    fmt.Sprintf("Maximum %d recipients allowed", maxRecipients),
 			StatusCode: model.StatusUnprocessableEntity,
 		}
 	}

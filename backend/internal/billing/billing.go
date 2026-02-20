@@ -28,6 +28,8 @@ type StripeClient interface {
 		ctx context.Context,
 		params *stripe.BillingPortalSessionCreateParams,
 	) (*stripe.BillingPortalSession, error)
+
+	CancelSubscription(ctx context.Context, id string) error
 }
 
 // stripeClientAdapter wraps a stripe.Client to implement StripeClient.
@@ -59,17 +61,27 @@ func (a *stripeClientAdapter) CreatePortalSession(
 	return sess, nil
 }
 
+func (a *stripeClientAdapter) CancelSubscription(ctx context.Context, id string) error {
+	_, err := a.client.V1Subscriptions.Cancel(ctx, id, &stripe.SubscriptionCancelParams{})
+	if err != nil {
+		return fmt.Errorf("cancel subscription: %w", err)
+	}
+
+	return nil
+}
+
 // Option configures the billing Service.
 type Option func(*Service) error
 
 // Service handles Stripe billing operations.
 type Service struct {
-	priceID       string
-	webhookSecret string
-	userRepo      user.Repository
-	stripeClient  StripeClient
-	successURL    string
-	cancelURL     string
+	priceID         string
+	webhookSecret   string
+	userRepo        user.Repository
+	stripeClient    StripeClient
+	successURL      string
+	cancelURL       string
+	portalReturnURL string
 }
 
 // New creates a new billing Service.
@@ -126,6 +138,15 @@ func WithCancelURL(url string) Option {
 	}
 }
 
+// WithPortalReturnURL sets the URL to redirect to after leaving the customer portal.
+func WithPortalReturnURL(url string) Option {
+	return func(s *Service) error {
+		s.portalReturnURL = url
+
+		return nil
+	}
+}
+
 // WithStripeClient replaces the default Stripe client.
 // This is primarily useful for testing.
 func WithStripeClient(sc StripeClient) Option {
@@ -138,6 +159,15 @@ func WithStripeClient(sc StripeClient) Option {
 
 // WebhookSecret returns the webhook signing secret.
 func (s *Service) WebhookSecret() string { return s.webhookSecret }
+
+// CancelSubscription cancels a Stripe subscription by its ID.
+func (s *Service) CancelSubscription(ctx context.Context, stripeSubID string) error {
+	if err := s.stripeClient.CancelSubscription(ctx, stripeSubID); err != nil {
+		return fmt.Errorf("cancel subscription: %w", err)
+	}
+
+	return nil
+}
 
 // HandleCheckout creates a Stripe Checkout Session and returns the URL.
 // Requires authentication (user must be in context).
@@ -210,7 +240,8 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 		}
 
 		params := &stripe.BillingPortalSessionCreateParams{
-			Customer: stripe.String(sub.StripeCustomerID),
+			Customer:  stripe.String(sub.StripeCustomerID),
+			ReturnURL: stripe.String(s.portalReturnURL),
 		}
 
 		sess, err := s.stripeClient.CreatePortalSession(r.Context(), params)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stripe/stripe-go/v82"
 
@@ -35,6 +36,10 @@ func (m *mockStripeClient) CreatePortalSession(
 	_ *stripe.BillingPortalSessionCreateParams,
 ) (*stripe.BillingPortalSession, error) {
 	return m.portalSession, m.portalErr
+}
+
+func (m *mockStripeClient) CancelSubscription(_ context.Context, _ string) error {
+	return nil
 }
 
 // mockUserRepo is a minimal test double for user.Repository.
@@ -80,6 +85,14 @@ func (m *mockUserRepo) FindUserByStripeCustomerID(_ context.Context, _ string) (
 }
 
 func (m *mockUserRepo) UpdateSubscriptionStatus(_ context.Context, _, _ string) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, _ time.Time) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) DeleteUser(_ context.Context, _ int64) error {
 	return errors.New("not implemented")
 }
 

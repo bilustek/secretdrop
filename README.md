@@ -70,6 +70,9 @@ export JWT_SECRET=change-me-to-a-strong-random-string
 export STRIPE_SECRET_KEY=sk_xxx
 export STRIPE_WEBHOOK_SECRET=whsec_xxx
 export STRIPE_PRICE_ID=price_xxx
+
+export SLACK_WEBHOOK_SUBSCRIPTIONS="https://hooks.slack.com/services/xxx"
+export SLACK_WEBHOOK_NOTIFICATIONS="https://hooks.slack.com/services/xxx"
 ```
 
 ## API Endpoints

@@ -15,7 +15,7 @@ func TestUserSecretsLimit(t *testing.T) {
 		want int
 	}{
 		{
-			name: "free tier returns 1",
+			name: "free tier returns 5",
 			tier: model.TierFree,
 			want: model.FreeTierLimit,
 		},
