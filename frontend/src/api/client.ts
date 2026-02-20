@@ -121,4 +121,14 @@ export const api = {
         "Content-Type": "application/json",
       },
     }).then((r) => r.json() as Promise<{ url: string }>),
+
+  deleteAccount: () =>
+    fetch(`${API_BASE}/me`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+      },
+    }).then((r) => {
+      if (!r.ok) throw new Error("Failed to delete account")
+    }),
 }
