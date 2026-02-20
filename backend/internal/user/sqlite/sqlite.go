@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
@@ -118,7 +119,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 		&u.UpdatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, model.ErrNotFound
 		}
 
@@ -152,7 +153,7 @@ func (r *Repository) FindByProvider(ctx context.Context, provider, providerID st
 		&u.UpdatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, model.ErrNotFound
 		}
 
@@ -166,9 +167,18 @@ func (r *Repository) FindByProvider(ctx context.Context, provider, providerID st
 func (r *Repository) IncrementSecretsUsed(ctx context.Context, id int64) error {
 	const query = `UPDATE users SET secrets_used = secrets_used + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("increment secrets used: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
 	}
 
 	return nil
@@ -178,9 +188,18 @@ func (r *Repository) IncrementSecretsUsed(ctx context.Context, id int64) error {
 func (r *Repository) ResetSecretsUsed(ctx context.Context, id int64) error {
 	const query = `UPDATE users SET secrets_used = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("reset secrets used: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
 	}
 
 	return nil
@@ -190,9 +209,18 @@ func (r *Repository) ResetSecretsUsed(ctx context.Context, id int64) error {
 func (r *Repository) UpdateTier(ctx context.Context, id int64, tier string) error {
 	const query = `UPDATE users SET tier = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, tier, id)
+	result, err := r.db.ExecContext(ctx, query, tier, id)
 	if err != nil {
 		return fmt.Errorf("update tier: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
 	}
 
 	return nil

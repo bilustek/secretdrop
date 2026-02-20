@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
@@ -324,6 +325,42 @@ func TestResetSecretsUsed(t *testing.T) {
 
 	if found.SecretsUsed != 0 {
 		t.Errorf("SecretsUsed = %d; want 0", found.SecretsUsed)
+	}
+}
+
+func TestIncrementSecretsUsed_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.IncrementSecretsUsed(ctx, 99999)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("IncrementSecretsUsed() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestResetSecretsUsed_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.ResetSecretsUsed(ctx, 99999)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("ResetSecretsUsed() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestUpdateTier_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.UpdateTier(ctx, 99999, model.TierPro)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("UpdateTier() error = %v; want model.ErrNotFound", err)
 	}
 }
 
