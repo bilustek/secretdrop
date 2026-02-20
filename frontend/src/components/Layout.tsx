@@ -1,6 +1,6 @@
 import { use, useEffect, useRef, useState } from "react"
 import { Link, Outlet, useLocation, useNavigate } from "react-router"
-import { Lock, CreditCard, LogOut, Trash2 } from "lucide-react"
+import { Lock, CreditCard, LogOut, Trash2, User } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { ThemeToggle } from "./ThemeToggle"
 import { api } from "../api/client"
@@ -81,12 +81,15 @@ export function Layout() {
                   {menuOpen && (
                     <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 z-50">
                       <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
-                        <p className="text-sm font-medium truncate">{auth.user.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase mr-1 ${auth.user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
+                        <p className="flex items-center justify-center gap-2 text-xs text-gray-500 py-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${auth.user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
                             {auth.user.tier}
                           </span>
-                          {auth.user.secrets_used} / {auth.user.secrets_limit} used
+                          <span>{auth.user.secrets_used} / {auth.user.secrets_limit} used</span>
+                        </p>
+                        <p className="flex items-center gap-2 text-sm font-medium truncate mt-1.5">
+                          <User size={16} className="shrink-0 text-gray-500" />
+                          {auth.user.name}
                         </p>
                       </div>
                       {auth.user.tier === "pro" && (
@@ -188,8 +191,10 @@ export function Layout() {
                 onClick={async () => {
                   try {
                     await api.deleteAccount()
-                  } finally {
                     auth.logout()
+                  } catch (err) {
+                    console.error("delete account failed:", err)
+                    setDeleteModalOpen(false)
                   }
                 }}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
