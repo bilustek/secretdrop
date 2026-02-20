@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
@@ -133,6 +134,22 @@ func (s *Service) handleInvoicePaid(ctx context.Context, event stripe.Event) {
 	if err := s.userRepo.ResetSecretsUsed(ctx, u.ID); err != nil {
 		slog.Error("reset secrets used", slogKeyError, err, slogKeyUserID, u.ID)
 	}
+
+	if invoice.Lines != nil && len(invoice.Lines.Data) > 0 {
+		line := invoice.Lines.Data[0]
+		periodStart := time.Unix(line.Period.Start, 0)
+		periodEnd := time.Unix(line.Period.End, 0)
+
+		sub, subErr := s.userRepo.FindSubscriptionByUserID(ctx, u.ID)
+		if subErr == nil {
+			periodErr := s.userRepo.UpdateSubscriptionPeriod(
+				ctx, sub.StripeSubscriptionID, periodStart, periodEnd,
+			)
+			if periodErr != nil {
+				slog.Error("update subscription period from invoice", slogKeyError, periodErr)
+			}
+		}
+	}
 }
 
 func (s *Service) handleSubscriptionDeleted(ctx context.Context, event stripe.Event) {
@@ -186,6 +203,17 @@ func (s *Service) handleSubscriptionUpdated(ctx context.Context, event stripe.Ev
 
 	if err := s.userRepo.UpdateSubscriptionStatus(ctx, sub.ID, status); err != nil {
 		slog.Error("update subscription status", slogKeyError, err, slogKeySubscriptionID, sub.ID)
+	}
+
+	// In stripe-go v82, CurrentPeriodStart/End live on SubscriptionItem, not Subscription.
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		item := sub.Items.Data[0]
+		periodStart := time.Unix(item.CurrentPeriodStart, 0)
+		periodEnd := time.Unix(item.CurrentPeriodEnd, 0)
+
+		if err := s.userRepo.UpdateSubscriptionPeriod(ctx, sub.ID, periodStart, periodEnd); err != nil {
+			slog.Error("update subscription period", slogKeyError, err, slogKeySubscriptionID, sub.ID)
+		}
 	}
 
 	var customerID string

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
@@ -351,6 +352,31 @@ func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, stripeSubID, 
 	result, err := r.db.ExecContext(ctx, query, status, stripeSubID)
 	if err != nil {
 		return fmt.Errorf("update subscription status: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpdateSubscriptionPeriod updates the current billing period for a subscription
+// identified by its Stripe subscription ID.
+// Returns model.ErrNotFound if no subscription exists with the given ID.
+func (r *Repository) UpdateSubscriptionPeriod(ctx context.Context, stripeSubID string, start, end time.Time) error {
+	const query = `UPDATE subscriptions
+		SET current_period_start = ?, current_period_end = ?
+		WHERE stripe_subscription_id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, start, end, stripeSubID)
+	if err != nil {
+		return fmt.Errorf("update subscription period: %w", err)
 	}
 
 	n, err := result.RowsAffected()

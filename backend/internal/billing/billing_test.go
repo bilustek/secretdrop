@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stripe/stripe-go/v82"
 
@@ -80,6 +81,10 @@ func (m *mockUserRepo) FindUserByStripeCustomerID(_ context.Context, _ string) (
 }
 
 func (m *mockUserRepo) UpdateSubscriptionStatus(_ context.Context, _, _ string) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, _ time.Time) error {
 	return errors.New("not implemented")
 }
 
