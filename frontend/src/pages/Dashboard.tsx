@@ -21,15 +21,16 @@ function CopyButton({ text }: { text: string }) {
 
 export default function Dashboard() {
   const auth = use(AuthContext)
-  if (!auth || !auth.user) return null
-
-  const { user, refreshUser } = auth
   const [text, setText] = useState("")
   const [emails, setEmails] = useState<string[]>([])
   const [emailInput, setEmailInput] = useState("")
   const [result, setResult] = useState<CreateSecretResponse | null>(null)
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  if (!auth || !auth.user) return null
+
+  const { user, refreshUser } = auth
 
   const addEmail = () => {
     const trimmed = emailInput.trim()

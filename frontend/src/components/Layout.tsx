@@ -105,9 +105,20 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
-        <div className="max-w-5xl mx-auto px-4 text-center text-sm text-gray-500">
-          SecretDrop — Encrypted one-time secret sharing
+      <footer className="border-t border-gray-200 dark:border-gray-800 py-6">
+        <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
+          <p>&copy; 2026 Bilustek, LLC. +1 (320) 317-7912</p>
+          <nav className="flex gap-6">
+            <Link to="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+              Terms &amp; Conditions
+            </Link>
+            <Link to="/privacy" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+              Privacy Policy
+            </Link>
+            <Link to="/contact" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+              Contact
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

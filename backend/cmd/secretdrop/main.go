@@ -120,6 +120,9 @@ func Run() error {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
+	// Contact form (public — no auth required)
+	mux.HandleFunc("POST /api/v1/contact", handler.NewContactHandler(sender))
+
 	handler.SetOpenAPISpec(docs.OpenAPISpec)
 	handler.RegisterDocs(mux)
 

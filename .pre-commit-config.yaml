@@ -5,3 +5,26 @@ repos:
       - id: golangci-lint-mod
       - id: go-mod-tidy
       - id: go-test-mod
+
+  - repo: local
+    hooks:
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: frontend-lint
+        name: frontend eslint
+        entry: bash -c 'cd frontend && npx eslint .'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+      - id: frontend-build
+        name: frontend build
+        entry: bash -c 'cd frontend && npx vite build'
+        language: system
+        files: ^frontend/
+        pass_filenames: false

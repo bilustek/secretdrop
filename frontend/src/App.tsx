@@ -6,6 +6,9 @@ import Dashboard from "./pages/Dashboard"
 import Reveal from "./pages/Reveal"
 import AuthCallback from "./pages/AuthCallback"
 import BillingSuccess from "./pages/BillingSuccess"
+import Terms from "./pages/Terms"
+import Privacy from "./pages/Privacy"
+import Contact from "./pages/Contact"
 
 export default function App() {
   return (
@@ -13,6 +16,9 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Landing />} />
         <Route path="s/:token" element={<Reveal />} />
+        <Route path="terms" element={<Terms />} />
+        <Route path="privacy" element={<Privacy />} />
+        <Route path="contact" element={<Contact />} />
         <Route element={<ProtectedRoute />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="billing/success" element={<BillingSuccess />} />
