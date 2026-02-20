@@ -39,6 +39,11 @@ secretdrop/
 │       │   ├── console/       # Console logger (development)
 │       │   └── noop/          # No-op sender (testing)
 │       ├── handler/           # HTTP handlers + JSON helpers
+│       ├── slack/             # Slack notifier interface
+│       │   ├── webhook/       # Slack webhook implementation
+│       │   ├── console/       # Console logger (development)
+│       │   ├── noop/          # No-op notifier (testing)
+│       │   └── sloghandler/   # Custom slog.Handler for error notifications
 │       ├── middleware/        # RequestID, logging, auth, content-type
 │       ├── model/             # Domain models, request/response types, errors
 │       ├── repository/        # Secret repository interface
@@ -90,6 +95,8 @@ secretdrop/
 | `STRIPE_SECRET_KEY` | Yes (prod only) | — |
 | `STRIPE_WEBHOOK_SECRET` | Yes (prod only) | — |
 | `STRIPE_PRICE_ID` | Yes (prod only) | — |
+| `SLACK_WEBHOOK_SUBSCRIPTIONS` | No | — |
+| `SLACK_WEBHOOK_NOTIFICATIONS` | No | — |
 
 ## Running the Backend
 
