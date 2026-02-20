@@ -1,0 +1,8 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+ignore:
+  - "backend/main.go"
+  - "backend/internal/email/resend/"
