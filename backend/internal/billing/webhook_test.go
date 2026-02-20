@@ -48,11 +48,11 @@ type webhookUserRepo struct {
 	resetSecretsUsedErr    error
 
 	// updateSubscriptionPeriod
-	updateSubPeriodCalled  bool
-	updateSubPeriodSubID   string
-	updateSubPeriodStart   time.Time
-	updateSubPeriodEnd     time.Time
-	updateSubPeriodErr     error
+	updateSubPeriodCalled bool
+	updateSubPeriodSubID  string
+	updateSubPeriodStart  time.Time
+	updateSubPeriodEnd    time.Time
+	updateSubPeriodErr    error
 
 	// subscription lookup
 	subscription    *model.Subscription
