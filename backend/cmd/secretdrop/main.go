@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	_ "embed"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bilusteknoloji/secretdrop/docs"
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
 	"github.com/bilusteknoloji/secretdrop/internal/config"
@@ -22,33 +23,34 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
 
-//go:embed docs/openapi.yaml
-var openAPISpec []byte
-
 const (
 	readHeaderTimeout   = 5 * time.Second
 	shutdownGracePeriod = 10 * time.Second
-	logKeyError         = "error"
 )
 
 func main() {
+	if err := Run(); err != nil {
+		slog.Error("fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func Run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("load config", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	repo, err := sqlite.New(cfg.DatabaseURL())
 	if err != nil {
-		slog.Error("open database", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() {
 		if closeErr := repo.Close(); closeErr != nil {
-			slog.Error("close database", logKeyError, closeErr)
+			slog.Error("close database", "error", closeErr)
 		}
 	}()
 
@@ -59,8 +61,7 @@ func main() {
 	} else {
 		sender, err = resend.New(cfg.ResendAPIKey(), resend.WithFrom(cfg.FromEmail()))
 		if err != nil {
-			slog.Error("create email sender", logKeyError, err)
-			os.Exit(1)
+			return fmt.Errorf("create email sender: %w", err)
 		}
 	}
 
@@ -71,8 +72,7 @@ func main() {
 		service.WithExpiry(cfg.SecretExpiry()),
 	)
 	if err != nil {
-		slog.Error("create service", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("create service: %w", err)
 	}
 
 	h := handler.NewSecretHandler(svc)
@@ -80,13 +80,12 @@ func main() {
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	handler.SetOpenAPISpec(openAPISpec)
+	handler.SetOpenAPISpec(docs.OpenAPISpec)
 	handler.RegisterDocs(mux)
 
 	rl, err := middleware.NewRateLimiter()
 	if err != nil {
-		slog.Error("create rate limiter", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("create rate limiter: %w", err)
 	}
 
 	var chain http.Handler = mux
@@ -104,26 +103,30 @@ func main() {
 
 	cleanupWorker, err := cleanup.New(repo, cleanup.WithInterval(cfg.CleanupInterval()))
 	if err != nil {
-		slog.Error("create cleanup worker", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("create cleanup worker: %w", err)
 	}
 
 	cleanupWorker.Start()
 
+	errCh := make(chan error, 1)
+
 	go func() {
 		slog.Info("server starting", "addr", addr, "version", appinfo.Version)
 
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server failed", logKeyError, err)
-			os.Exit(1)
+		if listenErr := srv.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {
+			errCh <- fmt.Errorf("server failed: %w", listenErr)
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-quit
 
-	slog.Info("shutting down server", "signal", sig.String())
+	select {
+	case sig := <-quit:
+		slog.Info("shutting down server", "signal", sig.String())
+	case err := <-errCh:
+		return err
+	}
 
 	cleanupWorker.Stop()
 
@@ -131,9 +134,10 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("server forced to shutdown", logKeyError, err)
-		os.Exit(1)
+		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
 	slog.Info("server stopped gracefully")
+
+	return nil
 }

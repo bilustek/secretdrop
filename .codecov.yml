@@ -4,5 +4,5 @@ coverage:
       default:
         target: 70%
 ignore:
-  - "backend/main.go"
+  - "backend/cmd/secretdrop/main.go"
   - "backend/internal/email/resend/"

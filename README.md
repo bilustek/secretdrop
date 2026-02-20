@@ -36,7 +36,7 @@ pre-commit install
 
 # Run the backend
 cd backend
-RESEND_API_KEY=re_xxxxx go run .
+RESEND_API_KEY=re_xxxxx go run ./cmd/secretdrop/
 ```
 
 The server starts at `http://localhost:8080`.
@@ -138,8 +138,10 @@ go mod tidy
 ```
 secretdrop/
 ├── backend/
-│   ├── main.go                 # Application entrypoint
+│   ├── cmd/secretdrop/
+│   │   └── main.go             # Application entrypoint
 │   ├── docs/
+│   │   ├── embed.go            # Embeds OpenAPI spec
 │   │   └── openapi.yaml        # OpenAPI 3.1 spec
 │   └── internal/
 │       ├── config/             # Env vars → Config struct

@@ -17,7 +17,11 @@ and auto-deleted after one-time reveal or expiry.
 ```
 secretdrop/
 ├── backend/
-│   ├── main.go
+│   ├── cmd/secretdrop/
+│   │   └── main.go            # Application entrypoint
+│   ├── docs/
+│   │   ├── embed.go           # Embeds OpenAPI spec
+│   │   └── openapi.yaml       # OpenAPI 3.1 spec
 │   ├── go.mod / go.sum
 │   ├── .golangci.yml
 │   └── internal/
@@ -64,11 +68,11 @@ secretdrop/
 ```bash
 # Production
 cd backend
-RESEND_API_KEY=re_xxx go run .    # starts server on :8080
+RESEND_API_KEY=re_xxx go run ./cmd/secretdrop/    # starts server on :8080
 
 # Development (no API key needed, emails logged to console)
 cd backend
-GOLANG_ENV=development go run .
+GOLANG_ENV=development go run ./cmd/secretdrop/
 ```
 
 ## Development Commands

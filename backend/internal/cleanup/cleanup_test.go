@@ -38,11 +38,13 @@ func TestWorkerCleansExpiredSecrets(t *testing.T) {
 		ExpiresAt:     time.Now().Add(10 * time.Minute).UTC(),
 	}
 
-	if err := repo.Store(ctx, expired); err != nil {
+	err = repo.Store(ctx, expired)
+	if err != nil {
 		t.Fatalf("Store(expired) error = %v", err)
 	}
 
-	if err := repo.Store(ctx, active); err != nil {
+	err = repo.Store(ctx, active)
+	if err != nil {
 		t.Fatalf("Store(active) error = %v", err)
 	}
 
