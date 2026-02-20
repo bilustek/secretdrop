@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"golang.org/x/oauth2"
@@ -179,8 +180,8 @@ func TestHandleGithubCallback_Success(t *testing.T) { //nolint:paralleltest // m
 		t.Fatalf("usersqlite.New() error = %v", err)
 	}
 
-	// Create auth service
-	svc, err := auth.New("test-secret")
+	// Create auth service with frontendBaseURL
+	svc, err := auth.New("test-secret", auth.WithFrontendBaseURL("http://localhost:3000"))
 	if err != nil {
 		t.Fatalf("auth.New() error = %v", err)
 	}
@@ -197,23 +198,32 @@ func TestHandleGithubCallback_Success(t *testing.T) { //nolint:paralleltest // m
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	// Verify: Response 200
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	// Verify: Response 307 redirect
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
 	}
 
-	// Verify: Body contains access_token and refresh_token
-	var pair auth.TokenPair
-	if err := json.NewDecoder(rec.Body).Decode(&pair); err != nil {
-		t.Fatalf("decode response: %v", err)
+	// Verify: Location header contains frontend callback URL with tokens
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("Location header is empty")
 	}
 
-	if pair.AccessToken == "" {
-		t.Error("access_token is empty")
+	redirectURL, parseErr := url.Parse(location)
+	if parseErr != nil {
+		t.Fatalf("parse Location URL: %v", parseErr)
 	}
 
-	if pair.RefreshToken == "" {
-		t.Error("refresh_token is empty")
+	if redirectURL.Path != "/auth/callback" {
+		t.Errorf("redirect path = %q; want %q", redirectURL.Path, "/auth/callback")
+	}
+
+	if redirectURL.Query().Get("access_token") == "" {
+		t.Error("access_token query param is empty")
+	}
+
+	if redirectURL.Query().Get("refresh_token") == "" {
+		t.Error("refresh_token query param is empty")
 	}
 }
 
@@ -287,7 +297,7 @@ func TestHandleGithubCallback_EmailFromEmailsAPI(t *testing.T) { //nolint:parall
 		t.Fatalf("usersqlite.New() error = %v", err)
 	}
 
-	svc, err := auth.New("test-secret")
+	svc, err := auth.New("test-secret", auth.WithFrontendBaseURL("http://localhost:3000"))
 	if err != nil {
 		t.Fatalf("auth.New() error = %v", err)
 	}
@@ -303,23 +313,32 @@ func TestHandleGithubCallback_EmailFromEmailsAPI(t *testing.T) { //nolint:parall
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	// Verify: Response 200
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	// Verify: Response 307 redirect
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
 	}
 
-	// Verify: Body contains access_token and refresh_token
-	var pair auth.TokenPair
-	if err := json.NewDecoder(rec.Body).Decode(&pair); err != nil {
-		t.Fatalf("decode response: %v", err)
+	// Verify: Location header contains frontend callback URL with tokens
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("Location header is empty")
 	}
 
-	if pair.AccessToken == "" {
-		t.Error("access_token is empty")
+	redirectURL, parseErr := url.Parse(location)
+	if parseErr != nil {
+		t.Fatalf("parse Location URL: %v", parseErr)
 	}
 
-	if pair.RefreshToken == "" {
-		t.Error("refresh_token is empty")
+	if redirectURL.Path != "/auth/callback" {
+		t.Errorf("redirect path = %q; want %q", redirectURL.Path, "/auth/callback")
+	}
+
+	if redirectURL.Query().Get("access_token") == "" {
+		t.Error("access_token query param is empty")
+	}
+
+	if redirectURL.Query().Get("refresh_token") == "" {
+		t.Error("refresh_token query param is empty")
 	}
 }
 
@@ -986,7 +1005,7 @@ func TestHandleGithubCallback_NameFallbackToLogin(
 		t.Fatalf("usersqlite.New() error = %v", err)
 	}
 
-	svc, err := auth.New("test-secret")
+	svc, err := auth.New("test-secret", auth.WithFrontendBaseURL("http://localhost:3000"))
 	if err != nil {
 		t.Fatalf("auth.New() error = %v", err)
 	}
@@ -999,16 +1018,27 @@ func TestHandleGithubCallback_NameFallbackToLogin(
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	// Verify: Response 307 redirect
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
 	}
 
-	var pair auth.TokenPair
-	if err := json.NewDecoder(rec.Body).Decode(&pair); err != nil {
-		t.Fatalf("decode response: %v", err)
+	// Verify: Location header contains frontend callback URL with tokens
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("Location header is empty")
 	}
 
-	if pair.AccessToken == "" {
-		t.Error("access_token is empty")
+	redirectURL, parseErr := url.Parse(location)
+	if parseErr != nil {
+		t.Fatalf("parse Location URL: %v", parseErr)
+	}
+
+	if redirectURL.Path != "/auth/callback" {
+		t.Errorf("redirect path = %q; want %q", redirectURL.Path, "/auth/callback")
+	}
+
+	if redirectURL.Query().Get("access_token") == "" {
+		t.Error("access_token query param is empty")
 	}
 }

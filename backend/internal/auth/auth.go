@@ -32,10 +32,11 @@ type TokenPair struct {
 
 // Service handles JWT token operations.
 type Service struct {
-	secret         []byte
-	accessExpiry   time.Duration
-	refreshExpiry  time.Duration
-	googleClientID string
+	secret          []byte
+	accessExpiry    time.Duration
+	refreshExpiry   time.Duration
+	googleClientID  string
+	frontendBaseURL string
 }
 
 // New creates a new auth Service.
@@ -80,6 +81,15 @@ func WithRefreshExpiry(d time.Duration) Option {
 		}
 
 		s.refreshExpiry = d
+
+		return nil
+	}
+}
+
+// WithFrontendBaseURL sets the frontend base URL for OAuth callback redirects.
+func WithFrontendBaseURL(u string) Option {
+	return func(s *Service) error {
+		s.frontendBaseURL = u
 
 		return nil
 	}
