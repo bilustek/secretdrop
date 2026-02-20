@@ -47,6 +47,13 @@ func UserFromContext(ctx context.Context) (*auth.Claims, bool) {
 	return claims, ok
 }
 
+// ContextWithUser returns a new context with the given auth claims.
+// This is intended for use in tests and internal services that need to
+// set user identity without going through the HTTP middleware.
+func ContextWithUser(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, userContextKey, claims)
+}
+
 func writeAuthError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
