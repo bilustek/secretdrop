@@ -25,6 +25,7 @@ type googleTokenInfo struct {
 	Email   string `json:"email"`
 	Name    string `json:"name"`
 	Picture string `json:"picture"`
+	Aud     string `json:"aud"`
 }
 
 // HandleTokenExchange verifies a provider token and returns a JWT pair.
@@ -68,7 +69,7 @@ func (s *Service) HandleTokenExchange(userRepo user.Repository) http.HandlerFunc
 func (s *Service) handleGoogleTokenExchange(
 	w http.ResponseWriter, r *http.Request, idToken string, userRepo user.Repository,
 ) {
-	info, err := verifyGoogleIDToken(r.Context(), idToken)
+	info, err := verifyGoogleIDToken(r.Context(), idToken, s.googleClientID)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{
 			"error": map[string]string{"type": "oauth_failed", "message": "Failed to verify Google ID token"},
@@ -189,7 +190,7 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func verifyGoogleIDToken(ctx context.Context, idToken string) (*googleTokenInfo, error) {
+func verifyGoogleIDToken(ctx context.Context, idToken, expectedAud string) (*googleTokenInfo, error) {
 	reqURL := googleTokenInfoURL + "?id_token=" + idToken
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -210,6 +211,11 @@ func verifyGoogleIDToken(ctx context.Context, idToken string) (*googleTokenInfo,
 	var info googleTokenInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("decode google tokeninfo: %w", err)
+	}
+
+	// Validate audience to prevent tokens issued for other applications.
+	if expectedAud != "" && info.Aud != expectedAud {
+		return nil, fmt.Errorf("audience mismatch: got %q, want %q", info.Aud, expectedAud)
 	}
 
 	return &info, nil

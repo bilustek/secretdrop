@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -79,7 +80,9 @@ func (s *Service) HandleGithubCallback(cfg *oauth2.Config, userRepo user.Reposit
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. Verify state
 		stateCookie, err := r.Cookie(oauthStateCookieName)
-		if err != nil || stateCookie.Value != r.URL.Query().Get("state") {
+		queryState := r.URL.Query().Get("state")
+
+		if err != nil || subtle.ConstantTimeCompare([]byte(stateCookie.Value), []byte(queryState)) != 1 {
 			writeJSON(w, http.StatusForbidden, map[string]any{
 				"error": map[string]string{"type": "invalid_state", "message": "Invalid OAuth state"},
 			})

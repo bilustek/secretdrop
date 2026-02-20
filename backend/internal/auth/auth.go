@@ -32,9 +32,10 @@ type TokenPair struct {
 
 // Service handles JWT token operations.
 type Service struct {
-	secret        []byte
-	accessExpiry  time.Duration
-	refreshExpiry time.Duration
+	secret         []byte
+	accessExpiry   time.Duration
+	refreshExpiry  time.Duration
+	googleClientID string
 }
 
 // New creates a new auth Service.
@@ -79,6 +80,15 @@ func WithRefreshExpiry(d time.Duration) Option {
 		}
 
 		s.refreshExpiry = d
+
+		return nil
+	}
+}
+
+// WithGoogleClientID sets the Google OAuth client ID for ID token audience validation.
+func WithGoogleClientID(id string) Option {
+	return func(s *Service) error {
+		s.googleClientID = id
 
 		return nil
 	}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
@@ -115,7 +116,8 @@ func handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handleServiceError(w http.ResponseWriter, err error) {
-	if appErr, ok := err.(*model.AppError); ok {
+	var appErr *model.AppError
+	if errors.As(err, &appErr) {
 		writeError(w, appErr.Type, appErr.Message, appErr.StatusCode)
 
 		return
