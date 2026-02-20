@@ -23,6 +23,9 @@ deleted** from the database — no trace left.
 | golangci-lint | v2 | `brew install golangci-lint` |
 | pre-commit | any | `brew install pre-commit` |
 | Resend account | — | [resend.com](https://resend.com) → grab an API key |
+| Google OAuth app | — | [console.cloud.google.com](https://console.cloud.google.com) |
+| GitHub OAuth app | — | [github.com/settings/developers](https://github.com/settings/developers) |
+| Stripe account | — | [stripe.com](https://stripe.com) → grab API keys |
 
 ## Quick Start
 
@@ -54,17 +57,38 @@ export BASE_URL=http://localhost:3000    # frontend URL (used in links)
 export FROM_EMAIL="SecretDrop <noreply@secretdrop.app>"     # sender address
 export SECRET_EXPIRY=10m                 # secret TTL
 export CLEANUP_INTERVAL=1m              # expired record cleanup frequency
+
+# Auth (required in production)
+export GOOGLE_CLIENT_ID=xxx
+export GOOGLE_CLIENT_SECRET=xxx
+export GITHUB_CLIENT_ID=xxx
+export GITHUB_CLIENT_SECRET=xxx
+export JWT_SECRET=change-me-to-a-strong-random-string
+
+# Billing (required in production)
+export STRIPE_SECRET_KEY=sk_xxx
+export STRIPE_WEBHOOK_SECRET=whsec_xxx
+export STRIPE_PRICE_ID=price_xxx
 ```
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/secrets` | Create an encrypted secret |
-| `POST` | `/api/v1/secrets/{token}/reveal` | Reveal and burn a secret |
-| `GET`  | `/healthz` | Health check |
-| `GET`  | `/docs` | API documentation (Scalar UI) |
-| `GET`  | `/docs/openapi.yaml` | OpenAPI 3.1 spec |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/secrets` | Yes | Create an encrypted secret |
+| `POST` | `/api/v1/secrets/{token}/reveal` | No | Reveal and burn a secret |
+| `GET`  | `/api/v1/me` | Yes | Authenticated user profile |
+| `GET`  | `/auth/google` | No | Google OAuth login redirect |
+| `GET`  | `/auth/google/callback` | No | Google OAuth callback |
+| `GET`  | `/auth/github` | No | GitHub OAuth login redirect |
+| `GET`  | `/auth/github/callback` | No | GitHub OAuth callback |
+| `POST` | `/auth/token` | No | Mobile token exchange |
+| `POST` | `/billing/checkout` | Yes | Create Stripe checkout session |
+| `POST` | `/billing/portal` | Yes | Stripe customer portal |
+| `POST` | `/billing/webhook` | No | Stripe webhook handler |
+| `GET`  | `/healthz` | No | Health check |
+| `GET`  | `/docs` | No | API documentation (Scalar UI) |
+| `GET`  | `/docs/openapi.yaml` | No | OpenAPI 3.1 spec |
 
 ### Example: Create a Secret
 
@@ -144,15 +168,19 @@ secretdrop/
 │   │   ├── embed.go            # Embeds OpenAPI spec
 │   │   └── openapi.yaml        # OpenAPI 3.1 spec
 │   └── internal/
+│       ├── appinfo/            # Version metadata
+│       ├── auth/               # OAuth flows (Google, GitHub) + JWT
+│       ├── billing/            # Stripe checkout, portal, webhooks
+│       ├── cleanup/            # Expired record cleanup worker
 │       ├── config/             # Env vars → Config struct
-│       ├── model/              # Domain models, request/response, errors
 │       ├── crypt/              # AES-256-GCM + HKDF encryption
-│       ├── repository/         # SQLite repository
 │       ├── email/              # Resend email delivery
-│       ├── service/            # Business logic (create/reveal)
 │       ├── handler/            # HTTP handlers + docs
-│       ├── middleware/         # Request ID, logging, content-type, rate limit
-│       └── cleanup/            # Expired record cleanup worker
+│       ├── middleware/         # Request ID, logging, auth, content-type, rate limit
+│       ├── model/              # Domain models, request/response, errors
+│       ├── repository/         # Secret repository (SQLite)
+│       ├── service/            # Business logic (create/reveal + limits)
+│       └── user/               # User repository (SQLite, users + subscriptions)
 ├── frontend/                   # React/TypeScript (TBD)
 ├── .pre-commit-config.yaml
 ├── .gitignore
@@ -167,6 +195,15 @@ secretdrop/
 - **Email hashing:** SHA-256 — raw email is never persisted
 - **One-time use:** record is permanently deleted from DB after reveal
 - **Auto-cleanup:** expired records are periodically purged
+- **Authentication:** JWT Bearer tokens (15-min access, 30-day refresh)
+- **OAuth:** Google + GitHub sign-in with CSRF state cookies
+
+## Pricing
+
+| Tier | Price | Secrets |
+|------|-------|---------|
+| Free | $0 | 1 secret (lifetime) |
+| Pro | $2.99/month | 100 secrets/month |
 
 ## License
 
