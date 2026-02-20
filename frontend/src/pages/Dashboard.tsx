@@ -81,7 +81,7 @@ export default function Dashboard() {
 
   if (result) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16">
+      <div className="max-w-5xl mx-auto px-4 py-16">
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8">
           <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-4">
             <Check size={20} />
@@ -133,7 +133,7 @@ export default function Dashboard() {
 
   if (limitReached && user.tier === "free") {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16">
+      <div className="max-w-5xl mx-auto px-4 py-16">
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
           <h2 className="font-semibold text-lg mb-2">You've used your free secret</h2>
           <p className="text-sm text-gray-500 mb-6">
@@ -152,7 +152,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-16">
+    <div className="max-w-5xl mx-auto px-4 py-16">
       <form onSubmit={handleSubmit}>
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-6">
           <h2 className="font-semibold text-lg mb-4">Create a Secret</h2>
