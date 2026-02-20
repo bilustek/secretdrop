@@ -4,7 +4,7 @@
 
 @theme {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-mono: "Fira Code", ui-monospace, Menlo, Consolas, monospace;
 }
 
 button, [role="button"], a {

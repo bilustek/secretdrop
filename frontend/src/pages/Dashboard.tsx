@@ -164,7 +164,7 @@ export default function Dashboard() {
             maxLength={4096}
             rows={5}
             required
-            className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white resize-none"
+            className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white resize-none"
           />
           <p className="text-xs text-gray-400 mt-1 text-right">{text.length}/4096</p>
 
