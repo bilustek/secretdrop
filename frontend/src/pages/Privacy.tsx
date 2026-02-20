@@ -52,24 +52,33 @@ export default function Privacy() {
       <h2>6. Data Retention</h2>
       <p>
         Secrets are permanently deleted after viewing or expiration. Account data is retained as long
-        as your account remains active. You may request deletion of your account by contacting us.
+        as your account remains active.
       </p>
 
-      <h2>7. Your Rights</h2>
+      <h2>7. Account Deletion</h2>
+      <p>
+        You may delete your account at any time from your account menu. Upon deletion, all account
+        data and subscription records are immediately and permanently removed. Previously shared
+        secrets are not linked to your account and will continue to expire on their original
+        schedule.
+      </p>
+
+      <h2>8. Your Rights</h2>
       <p>You have the right to:</p>
       <ul>
         <li>Access the personal data we hold about you</li>
         <li>Request correction or deletion of your data</li>
+        <li>Delete your account directly from the Service</li>
         <li>Withdraw consent for data processing</li>
       </ul>
 
-      <h2>8. Changes to This Policy</h2>
+      <h2>9. Changes to This Policy</h2>
       <p>
         We may update this Privacy Policy from time to time. We will notify you of significant
         changes through the Service.
       </p>
 
-      <h2>9. Contact</h2>
+      <h2>10. Contact</h2>
       <p>
         For privacy-related inquiries, contact us at{" "}
         <a href="mailto:support@bilusteknoloji.com">support@bilusteknoloji.com</a>.
