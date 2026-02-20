@@ -19,7 +19,11 @@ type SubscriptionCanceller interface {
 }
 
 // NewDeleteAccountHandler returns a handler for DELETE /api/v1/me.
-func NewDeleteAccountHandler(userRepo user.Repository, canceller SubscriptionCanceller, notifier slack.Notifier) http.HandlerFunc {
+func NewDeleteAccountHandler(
+	userRepo user.Repository,
+	canceller SubscriptionCanceller,
+	notifier slack.Notifier,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := middleware.UserFromContext(r.Context())
 		if !ok {
