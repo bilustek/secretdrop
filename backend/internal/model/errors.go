@@ -36,4 +36,5 @@ var (
 	ErrTextTooLong   = errors.New("text exceeds maximum length")
 	ErrTooManyRecips = errors.New("too many recipients")
 	ErrInvalidEmail  = errors.New("invalid email address")
+	ErrLimitReached  = errors.New("secret creation limit reached")
 )
