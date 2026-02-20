@@ -37,3 +37,6 @@ Thumbs.db
 # Coverage
 coverage/
 *.coverprofile
+
+# Playwright MCP
+.playwright-mcp/
