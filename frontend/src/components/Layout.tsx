@@ -65,9 +65,15 @@ export function Layout() {
                   </button>
                   {menuOpen && (
                     <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 z-50">
-                      <p className="px-4 py-2 text-sm font-medium truncate border-b border-gray-200 dark:border-gray-800">
-                        {auth.user.name}
-                      </p>
+                      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+                        <p className="text-sm font-medium truncate">{auth.user.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-800 uppercase mr-1">
+                            {auth.user.tier}
+                          </span>
+                          {auth.user.secrets_used} / {auth.user.secrets_limit} used
+                        </p>
+                      </div>
                       {auth.user.tier === "pro" && (
                         <button
                           type="button"
