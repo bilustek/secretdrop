@@ -107,9 +107,7 @@ func TestHandleGoogleLogin_RedirectsToGoogle(t *testing.T) {
 	}
 }
 
-func TestHandleGoogleCallback_Success(t *testing.T) {
-	t.Parallel()
-
+func TestHandleGoogleCallback_Success(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
 	// 1. Create mock server that serves both token endpoint and userinfo endpoint
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
