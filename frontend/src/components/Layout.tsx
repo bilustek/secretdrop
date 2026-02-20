@@ -79,7 +79,7 @@ export function Layout() {
                     />
                   </button>
                   {menuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 z-50">
+                    <div className="absolute right-0 mt-2 min-w-48 whitespace-nowrap rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 z-50">
                       <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
                         <p className="flex items-center justify-center gap-2 text-xs text-gray-500 py-2">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${auth.user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
@@ -87,7 +87,7 @@ export function Layout() {
                           </span>
                           <span>{auth.user.secrets_used} / {auth.user.secrets_limit} used</span>
                         </p>
-                        <p className="flex items-center gap-2 text-sm font-medium truncate mt-1.5">
+                        <p className="flex items-center gap-2 text-sm font-medium mt-1.5">
                           <User size={16} className="shrink-0 text-gray-500" />
                           {auth.user.name}
                         </p>
