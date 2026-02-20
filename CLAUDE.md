@@ -39,7 +39,7 @@ secretdrop/
 │       │   ├── console/       # Console logger (development)
 │       │   └── noop/          # No-op sender (testing)
 │       ├── handler/           # HTTP handlers + JSON helpers
-│       ├── middleware/        # RequestID, logging, auth, content-type, rate limit
+│       ├── middleware/        # RequestID, logging, auth, content-type
 │       ├── model/             # Domain models, request/response types, errors
 │       ├── repository/        # Secret repository interface
 │       │   └── sqlite/        # SQLite implementation

@@ -176,7 +176,7 @@ secretdrop/
 │       ├── crypt/              # AES-256-GCM + HKDF encryption
 │       ├── email/              # Resend email delivery
 │       ├── handler/            # HTTP handlers + docs
-│       ├── middleware/         # Request ID, logging, auth, content-type, rate limit
+│       ├── middleware/         # Request ID, logging, auth, content-type
 │       ├── model/              # Domain models, request/response, errors
 │       ├── repository/         # Secret repository (SQLite)
 │       ├── service/            # Business logic (create/reveal + limits)

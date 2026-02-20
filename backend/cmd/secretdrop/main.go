@@ -143,15 +143,9 @@ func Run() error {
 		return billingErr
 	}
 
-	rl, err := middleware.NewRateLimiter()
-	if err != nil {
-		return fmt.Errorf("create rate limiter: %w", err)
-	}
-
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
-	chain = rl.Limit(chain)
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
 

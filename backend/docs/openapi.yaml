@@ -117,16 +117,6 @@ paths:
                     error:
                       type: invalid_email
                       message: "Invalid email address: not-an-email"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                error:
-                  type: rate_limited
-                  message: "Too many requests"
 
   /api/v1/secrets/{token}/reveal:
     post:
@@ -615,7 +605,6 @@ components:
                 - text_too_long
                 - too_many_recipients
                 - invalid_email
-                - rate_limited
                 - limit_reached
                 - unauthorized
                 - internal_error
