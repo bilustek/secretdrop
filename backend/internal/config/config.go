@@ -11,7 +11,7 @@ const (
 	defaultPort            = "8080"
 	defaultDatabaseURL     = "file:db/secretdrop.db?_journal_mode=WAL"
 	defaultBaseURL         = "http://localhost:3000"
-	defaultFromEmail       = "SecretDrop <noreply@secretdrop.app>"
+	defaultFromEmail       = "SecretDrop <noreply@secretdrop.us>"
 	defaultSecretExpiry    = 10 * time.Minute
 	defaultCleanupInterval = 1 * time.Minute
 	defaultEnv             = "production"

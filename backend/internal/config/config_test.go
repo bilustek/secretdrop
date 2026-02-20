@@ -32,7 +32,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("BaseURL() = %q; want default", cfg.BaseURL())
 	}
 
-	if cfg.FromEmail() != "SecretDrop <noreply@secretdrop.app>" {
+	if cfg.FromEmail() != "SecretDrop <noreply@secretdrop.us>" {
 		t.Errorf("FromEmail() = %q; want default", cfg.FromEmail())
 	}
 

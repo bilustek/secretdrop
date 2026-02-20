@@ -76,7 +76,7 @@ secretdrop/
 | `PORT` | No | `8080` |
 | `DATABASE_URL` | No | `file:db/secretdrop.db?_journal_mode=WAL` |
 | `BASE_URL` | No | `http://localhost:3000` |
-| `FROM_EMAIL` | No | `SecretDrop <noreply@secretdrop.app>` |
+| `FROM_EMAIL` | No | `SecretDrop <noreply@secretdrop.us>` |
 | `SECRET_EXPIRY` | No | `10m` |
 | `CLEANUP_INTERVAL` | No | `1m` |
 | `GOOGLE_CLIENT_ID` | Yes (prod only) | — |
