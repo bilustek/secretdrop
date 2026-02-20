@@ -3,6 +3,7 @@ module github.com/bilusteknoloji/secretdrop
 go 1.26.0
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/resend/resend-go/v2 v2.28.0
 	modernc.org/sqlite v1.46.1
