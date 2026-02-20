@@ -373,3 +373,16 @@ func TestVerifyToken_MalformedToken(t *testing.T) {
 		t.Fatal("VerifyToken() should fail for malformed token")
 	}
 }
+
+func TestNew_WithGoogleClientID(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret", auth.WithGoogleClientID("my-google-client-id"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc == nil {
+		t.Fatal("New() returned nil service")
+	}
+}

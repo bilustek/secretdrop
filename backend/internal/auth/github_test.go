@@ -1,7 +1,9 @@
 package auth_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +11,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	"github.com/bilusteknoloji/secretdrop/internal/model"
 	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
@@ -363,5 +366,639 @@ func TestHandleGithubCallback_InvalidState(t *testing.T) {
 
 	if body["error"]["type"] != "invalid_state" {
 		t.Errorf("error type = %q; want %q", body["error"]["type"], "invalid_state")
+	}
+}
+
+func TestHandleGithubCallback_MissingState(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	// Send request without state cookie.
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=some-state&code=test-code", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestHandleGithubCallback_CodeExchangeFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport that fails the token exchange.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.WriteHeader(http.StatusUnauthorized)
+				rec.Header().Set("Content-Type", "application/json")
+				rec.Body.WriteString(`{"error":"bad_verification_code"}`)
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=bad-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "oauth_failed" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "oauth_failed")
+	}
+}
+
+func TestHandleGithubCallback_FetchUserInfoFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange succeeds but /user returns non-200.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.WriteHeader(http.StatusServiceUnavailable)
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Message != "Failed to fetch user info" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to fetch user info")
+	}
+}
+
+func TestHandleGithubCallback_FetchUserInfoBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange succeeds, /user returns invalid JSON.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				rec.Body.WriteString("invalid-json{{{")
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}
+
+func TestHandleGithubCallback_EmailFetchFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: /user returns empty email, /user/emails returns non-200.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"id":         12345,
+					"login":      "testuser",
+					"name":       "Test User",
+					"email":      nil,
+					"avatar_url": "https://avatars.githubusercontent.com/u/12345",
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user/emails" {
+				rec := httptest.NewRecorder()
+				rec.WriteHeader(http.StatusForbidden)
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Message != "Failed to fetch user email" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to fetch user email")
+	}
+}
+
+func TestHandleGithubCallback_EmailBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: /user returns empty email, /user/emails returns invalid JSON.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"id":         12345,
+					"login":      "testuser",
+					"name":       "Test User",
+					"email":      nil,
+					"avatar_url": "https://avatars.githubusercontent.com/u/12345",
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user/emails" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				rec.Body.WriteString("not-valid-json[[[")
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}
+
+func TestHandleGithubCallback_NoPrimaryVerifiedEmail(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: /user returns empty email, /user/emails returns no primary verified email.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"id":         12345,
+					"login":      "testuser",
+					"name":       "Test User",
+					"email":      nil,
+					"avatar_url": "https://avatars.githubusercontent.com/u/12345",
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user/emails" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode([]map[string]any{
+					{"email": "unverified@example.com", "primary": true, "verified": false},
+					{"email": "secondary@example.com", "primary": false, "verified": true},
+				})
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}
+
+func TestHandleGithubCallback_UpsertFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange and /user both succeed.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"id":         12345,
+					"login":      "testuser",
+					"name":       "Test User",
+					"email":      "test@example.com",
+					"avatar_url": "https://avatars.githubusercontent.com/u/12345",
+				})
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	// Use mock repo that fails on Upsert.
+	repo := &mockUserRepo{
+		upsertFn: func(_ context.Context, _ *model.User) (*model.User, error) {
+			return nil, errors.New("db connection lost")
+		},
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Message != "Failed to create user" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to create user")
+	}
+}
+
+func TestHandleGithubCallback_NameFallbackToLogin(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: /user returns empty name, Login should be used.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host == "github.com" && req.URL.Path == "/login/oauth/access_token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "api.github.com" && req.URL.Path == "/user" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"id":         22222,
+					"login":      "loginonly",
+					"name":       "",
+					"email":      "login@example.com",
+					"avatar_url": "https://avatars.githubusercontent.com/u/22222",
+				})
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGithubCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/github/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var pair auth.TokenPair
+	if err := json.NewDecoder(rec.Body).Decode(&pair); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if pair.AccessToken == "" {
+		t.Error("access_token is empty")
 	}
 }

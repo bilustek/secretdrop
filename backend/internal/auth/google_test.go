@@ -1,7 +1,9 @@
 package auth_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +11,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	"github.com/bilusteknoloji/secretdrop/internal/model"
 	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
@@ -337,4 +340,341 @@ func searchSubstring(s, substr string) bool {
 	}
 
 	return false
+}
+
+// mockUserRepo implements user.Repository for testing error paths.
+type mockUserRepo struct {
+	upsertFn func(ctx context.Context, u *model.User) (*model.User, error)
+}
+
+func (m *mockUserRepo) Upsert(ctx context.Context, u *model.User) (*model.User, error) {
+	if m.upsertFn != nil {
+		return m.upsertFn(ctx, u)
+	}
+
+	return nil, errors.New("upsert not configured")
+}
+
+func (m *mockUserRepo) FindByID(_ context.Context, _ int64) (*model.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepo) FindByProvider(_ context.Context, _, _ string) (*model.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepo) IncrementSecretsUsed(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) ResetSecretsUsed(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) UpdateTier(_ context.Context, _ int64, _ string) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) UpsertSubscription(_ context.Context, _ *model.Subscription) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) FindSubscriptionByUserID(_ context.Context, _ int64) (*model.Subscription, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepo) FindUserByStripeCustomerID(_ context.Context, _ string) (*model.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserRepo) UpdateSubscriptionStatus(_ context.Context, _, _ string) error {
+	return errors.New("not implemented")
+}
+
+// errorResponse is a helper type for decoding error JSON responses.
+type errorResponse struct {
+	Error struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func TestHandleGoogleCallback_CodeExchangeFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport that fails the token exchange.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			// Token exchange — return 401 to simulate failure.
+			if req.URL.Path == "/token" {
+				rec := httptest.NewRecorder()
+				rec.WriteHeader(http.StatusUnauthorized)
+				rec.Header().Set("Content-Type", "application/json")
+				rec.Body.WriteString(`{"error":"invalid_grant"}`)
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://mock.example.com/token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGoogleCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?state=test-state&code=bad-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "oauth_failed" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "oauth_failed")
+	}
+}
+
+func TestHandleGoogleCallback_FetchUserInfoFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange succeeds but userinfo fails.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path == "/token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			// Userinfo — return non-200.
+			if req.URL.Host == "www.googleapis.com" {
+				rec := httptest.NewRecorder()
+				rec.WriteHeader(http.StatusServiceUnavailable)
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://mock.example.com/token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGoogleCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "internal_error" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "internal_error")
+	}
+}
+
+func TestHandleGoogleCallback_UpsertFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange and userinfo both succeed.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path == "/token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "www.googleapis.com" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]string{
+					"id":      "google-user-123",
+					"email":   "test@example.com",
+					"name":    "Test User",
+					"picture": "https://example.com/avatar.jpg",
+				})
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://mock.example.com/token",
+		},
+	}
+
+	// Use mock repo that fails on Upsert.
+	repo := &mockUserRepo{
+		upsertFn: func(_ context.Context, _ *model.User) (*model.User, error) {
+			return nil, errors.New("db connection lost")
+		},
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGoogleCallback(cfg, repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Message != "Failed to create user" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to create user")
+	}
+}
+
+func TestHandleGoogleCallback_FetchUserInfoBadJSON(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+	// Mock transport: token exchange succeeds, userinfo returns invalid JSON.
+	mockTransport := &mockRoundTripper{
+		handler: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path == "/token" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(rec).Encode(map[string]any{
+					"access_token": "mock-access-token",
+					"token_type":   "Bearer",
+					"expires_in":   3600,
+				})
+
+				return rec.Result(), nil
+			}
+
+			if req.URL.Host == "www.googleapis.com" {
+				rec := httptest.NewRecorder()
+				rec.Header().Set("Content-Type", "application/json")
+				rec.Body.WriteString("not-valid-json{{{")
+
+				return rec.Result(), nil
+			}
+
+			return nil, http.ErrNotSupported
+		},
+	}
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = mockTransport
+
+	defer func() { http.DefaultTransport = origTransport }()
+
+	cfg := &oauth2.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Endpoint: oauth2.Endpoint{
+			TokenURL: "https://mock.example.com/token",
+		},
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleGoogleCallback(cfg, userRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?state=test-state&code=test-code", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "test-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
 }
