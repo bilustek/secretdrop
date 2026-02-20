@@ -1,0 +1,284 @@
+openapi: "3.1.0"
+info:
+  title: SecretDrop API
+  description: |
+    Secure one-time secret sharing API. Secrets are encrypted with
+    AES-256-GCM (HKDF-derived keys), stored in SQLite, and permanently
+    deleted after a single reveal or expiry.
+
+    ## Security Model
+
+    - The encryption key never touches the server database.
+    - Key is carried only in the URL fragment (`#` after the path) which
+      browsers and proxies do not send to the server.
+    - HKDF binds each key to the recipient's email — the same link cannot
+      be opened by a different email address.
+    - `recipient_hash` is SHA-256 of the email; the raw email is never stored.
+  version: "1.0.0"
+  contact:
+    name: Bilus Teknoloji
+    url: https://github.com/bilusteknoloji/secretdrop
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /api/v1/secrets:
+    post:
+      operationId: createSecret
+      summary: Create an encrypted secret
+      description: |
+        Encrypts the given text for each recipient using a unique random key,
+        stores the ciphertext in the database, and sends a one-time link via email.
+
+        The link format is `{baseURL}/s/{token}#{base64url-key}`.
+        The fragment (`#key`) is never sent to the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequest"
+            example:
+              text: "RESEND_API_KEY=re_xxxxx"
+              to:
+                - "vigo@me.com"
+                - "dev@team.com"
+      responses:
+        "201":
+          description: Secret created for all recipients
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateResponse"
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                expires_at: "2026-02-20T23:10:00Z"
+                recipients:
+                  - email: "vigo@me.com"
+                    link: "http://localhost:3000/s/abc123#base64urlkey"
+                  - email: "dev@team.com"
+                    link: "http://localhost:3000/s/def456#base64urlkey2"
+        "415":
+          description: Content-Type is not application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                text_too_long:
+                  summary: Text exceeds 4KB
+                  value:
+                    error:
+                      type: text_too_long
+                      message: "Text exceeds maximum length of 4KB"
+                too_many_recipients:
+                  summary: More than 5 recipients
+                  value:
+                    error:
+                      type: too_many_recipients
+                      message: "Maximum 5 recipients allowed"
+                invalid_email:
+                  summary: Malformed email address
+                  value:
+                    error:
+                      type: invalid_email
+                      message: "Invalid email address: not-an-email"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: rate_limited
+                  message: "Too many requests"
+
+  /api/v1/secrets/{token}/reveal:
+    post:
+      operationId: revealSecret
+      summary: Reveal and burn a secret
+      description: |
+        Decrypts the secret using the provided key and email, returns the
+        plaintext, and **permanently deletes** the record from the database.
+
+        A second call with the same token will return 404.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The unique token identifying the secret
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevealRequest"
+            example:
+              email: "vigo@me.com"
+              key: "base64url-encoded-random-key"
+      responses:
+        "200":
+          description: Secret decrypted and deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealResponse"
+              example:
+                text: "RESEND_API_KEY=re_xxxxx"
+        "403":
+          description: Wrong email or key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: decrypt_failed
+                  message: "Decryption failed"
+        "404":
+          description: Secret not found (wrong token or already revealed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: not_found
+                  message: "Secret not found"
+        "410":
+          description: Secret expired or already viewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                expired:
+                  summary: Secret has expired
+                  value:
+                    error:
+                      type: expired
+                      message: "Secret has expired"
+                already_viewed:
+                  summary: Secret already revealed
+                  value:
+                    error:
+                      type: already_viewed
+                      message: "Secret has already been viewed"
+
+  /healthz:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+components:
+  schemas:
+    CreateRequest:
+      type: object
+      required:
+        - text
+        - to
+      properties:
+        text:
+          type: string
+          maxLength: 4096
+          description: The secret text to encrypt (max 4KB)
+        to:
+          type: array
+          items:
+            type: string
+            format: email
+          minItems: 1
+          maxItems: 5
+          description: Recipient email addresses (max 5)
+
+    CreateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Batch identifier
+        expires_at:
+          type: string
+          format: date-time
+          description: When the secrets will expire
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipientLink"
+
+    RecipientLink:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        link:
+          type: string
+          format: uri
+          description: "One-time link with key in URL fragment"
+
+    RevealRequest:
+      type: object
+      required:
+        - email
+        - key
+      properties:
+        email:
+          type: string
+          format: email
+          description: Recipient email used during creation
+        key:
+          type: string
+          description: Base64url-encoded random key from the URL fragment
+
+    RevealResponse:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The decrypted secret text
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - not_found
+                - expired
+                - already_viewed
+                - decrypt_failed
+                - validation_error
+                - text_too_long
+                - too_many_recipients
+                - invalid_email
+                - rate_limited
+                - internal_error
+            message:
+              type: string

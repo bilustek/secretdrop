@@ -8,6 +8,7 @@
 *.out
 vendor/
 backend/secretdrop
+*.db
 
 # Node.js
 node_modules/
@@ -31,6 +32,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.envrc
 
 # Coverage
 coverage/

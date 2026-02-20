@@ -1,0 +1,39 @@
+name: Run golangci-lint
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**.go'
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**.go'
+
+concurrency:
+  group: secretdrop-lint
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Run linter
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.9
+          working-directory: backend

@@ -1,0 +1,42 @@
+name: Run go tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**.go'
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '**'
+    paths:
+      - 'backend/**.go'
+
+concurrency:
+  group: secretdrop-test
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        id: go
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Tests
+        run: go test -coverprofile=coverage.txt -race -failfast -count=1 ./...
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN_PUBLIC }}
+          slug: bilusteknoloji/secretdrop
