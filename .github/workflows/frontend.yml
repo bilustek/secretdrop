@@ -12,7 +12,7 @@ on:
       - 'frontend/**'
 
 concurrency:
-  group: secretdrop-frontend
+  group: secretdrop-frontend-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
