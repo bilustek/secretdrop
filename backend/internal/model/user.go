@@ -43,3 +43,13 @@ func (u *User) SecretsLimit() int {
 func (u *User) CanCreateSecret() bool {
 	return u.SecretsUsed < u.SecretsLimit()
 }
+
+// RecipientsLimit returns the maximum number of recipients per secret
+// based on the user's tier.
+func (u *User) RecipientsLimit() int {
+	if u.Tier == TierPro {
+		return ProMaxRecipients
+	}
+
+	return FreeMaxRecipients
+}

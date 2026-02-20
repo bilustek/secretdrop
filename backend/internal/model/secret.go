@@ -5,8 +5,10 @@ import "time"
 const (
 	// MaxTextLength is the maximum allowed size for secret text (4KB).
 	MaxTextLength = 4096
-	// MaxRecipients is the maximum number of recipients per secret.
-	MaxRecipients = 5
+	// FreeMaxRecipients is the maximum number of recipients for free tier.
+	FreeMaxRecipients = 1
+	// ProMaxRecipients is the maximum number of recipients for pro tier.
+	ProMaxRecipients = 5
 )
 
 // Secret represents a stored encrypted secret in the database.

@@ -31,10 +31,11 @@ export default function Dashboard() {
   if (!auth || !auth.user) return null
 
   const { user, refreshUser } = auth
+  const maxRecipients = user.tier === "pro" ? 5 : 1
 
   const addEmail = () => {
     const trimmed = emailInput.trim()
-    if (trimmed && !emails.includes(trimmed) && emails.length < 5) {
+    if (trimmed && !emails.includes(trimmed) && emails.length < maxRecipients) {
       setEmails([...emails, trimmed])
       setEmailInput("")
     }
@@ -185,7 +186,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={addEmail}
-                disabled={emails.length >= 5}
+                disabled={emails.length >= maxRecipients}
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
               >
                 <Plus size={16} />
@@ -203,7 +204,7 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-            <p className="text-xs text-gray-400 mt-1">{emails.length}/5 recipients</p>
+            <p className="text-xs text-gray-400 mt-1">{emails.length}/{maxRecipients} recipients</p>
           </div>
 
           {error && (

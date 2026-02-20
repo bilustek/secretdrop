@@ -478,3 +478,68 @@ func TestCreate_IncrementsUsage(t *testing.T) {
 		t.Errorf("SecretsUsed = %d; want 1", updated.SecretsUsed)
 	}
 }
+
+func TestCreate_FreeUserRecipientLimit(t *testing.T) {
+	t.Parallel()
+
+	svc, userRepo := newTestServiceWithUserRepo(t)
+	ctx := context.Background()
+
+	u, err := userRepo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "free-recip-1",
+		Email:      "freerecip@example.com",
+		Name:       "Free Recip User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	// Free user should be limited to 1 recipient.
+	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"a@b.com", "b@b.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error for free user with 2 recipients")
+	}
+
+	appErr, ok := createErr.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", createErr)
+	}
+
+	if appErr.Type != "too_many_recipients" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "too_many_recipients")
+	}
+}
+
+func TestCreate_ProUserMultipleRecipients(t *testing.T) {
+	t.Parallel()
+
+	svc, userRepo := newTestServiceWithUserRepo(t)
+	ctx := context.Background()
+
+	u, err := userRepo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "pro-recip-1",
+		Email:      "prorecip@example.com",
+		Name:       "Pro Recip User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	if err := userRepo.UpdateTier(ctx, u.ID, model.TierPro); err != nil {
+		t.Fatalf("UpdateTier() error = %v", err)
+	}
+
+	// Pro user should be able to send to 5 recipients.
+	_, createErr := svc.Create(ctx, u.ID, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"a@b.com", "b@b.com", "c@b.com", "d@b.com", "e@b.com"},
+	})
+	if createErr != nil {
+		t.Fatalf("Create() error = %v; pro user should allow 5 recipients", createErr)
+	}
+}

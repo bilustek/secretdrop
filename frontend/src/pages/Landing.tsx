@@ -113,7 +113,7 @@ export default function Landing() {
             <p className="text-sm text-gray-500 mt-1">forever</p>
             <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li>5 secrets (lifetime)</li>
-              <li>Up to 5 recipients</li>
+              <li>1 recipient per secret</li>
               <li>AES-256-GCM encryption</li>
             </ul>
             <button

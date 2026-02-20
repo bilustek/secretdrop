@@ -40,8 +40,9 @@ paths:
         The link format is `{baseURL}/s/{token}#{base64url-key}`.
         The fragment (`#key`) is never sent to the server.
 
-        Requires authentication. Free tier allows 5 secrets (lifetime),
-        Pro tier allows 100 secrets per month.
+        Requires authentication. Free tier allows 5 secrets (lifetime)
+        with 1 recipient per secret. Pro tier allows 100 secrets per month
+        with up to 5 recipients per secret.
       security:
         - bearerAuth: []
       requestBody:
@@ -545,7 +546,7 @@ components:
             format: email
           minItems: 1
           maxItems: 5
-          description: Recipient email addresses (max 5)
+          description: Recipient email addresses (free tier: max 1, pro tier: max 5)
 
     CreateResponse:
       type: object
