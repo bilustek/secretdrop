@@ -12,7 +12,7 @@ on:
       - 'backend/**.go'
 
 concurrency:
-  group: secretdrop-lint
+  group: secretdrop-lint-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
