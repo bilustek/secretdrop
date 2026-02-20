@@ -8,13 +8,14 @@ interface ApiError {
 }
 
 export class AppError extends Error {
-  constructor(
-    public type: string,
-    message: string,
-    public status: number,
-  ) {
+  type: string
+  status: number
+
+  constructor(type: string, message: string, status: number) {
     super(message)
     this.name = "AppError"
+    this.type = type
+    this.status = status
   }
 }
 

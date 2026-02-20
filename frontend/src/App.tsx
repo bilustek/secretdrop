@@ -1,7 +1,22 @@
+import { Routes, Route } from "react-router"
+import { Layout } from "./components/Layout"
+import { ProtectedRoute } from "./components/ProtectedRoute"
+import Landing from "./pages/Landing"
+import Dashboard from "./pages/Dashboard"
+import Reveal from "./pages/Reveal"
+import AuthCallback from "./pages/AuthCallback"
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      <h1 className="text-2xl font-bold p-8">SecretDrop</h1>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Landing />} />
+        <Route path="s/:token" element={<Reveal />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="dashboard" element={<Dashboard />} />
+        </Route>
+      </Route>
+      <Route path="auth/callback" element={<AuthCallback />} />
+    </Routes>
   )
 }
