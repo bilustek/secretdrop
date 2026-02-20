@@ -75,7 +75,7 @@ func Run() error {
 		return fmt.Errorf("create service: %w", err)
 	}
 
-	h := handler.NewSecretHandler(svc)
+	h := handler.NewSecretHandler(svc, nil)
 
 	mux := http.NewServeMux()
 	h.Register(mux)
