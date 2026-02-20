@@ -83,7 +83,7 @@ export function Layout() {
                       <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
                         <p className="text-sm font-medium truncate">{auth.user.name}</p>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-800 uppercase mr-1">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase mr-1 ${auth.user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
                             {auth.user.tier}
                           </span>
                           {auth.user.secrets_used} / {auth.user.secrets_limit} used

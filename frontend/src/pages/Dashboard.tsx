@@ -223,7 +223,7 @@ export default function Dashboard() {
 
       <div className="mt-8 flex items-center justify-between text-sm text-gray-500">
         <p>
-          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 mr-2 uppercase">
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mr-2 uppercase ${user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
             {user.tier}
           </span>
           {user.secrets_used} / {user.secrets_limit} secrets used
