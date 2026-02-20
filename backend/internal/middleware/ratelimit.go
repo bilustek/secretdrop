@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -26,13 +27,50 @@ type RateLimiter struct {
 	window   time.Duration
 }
 
-// NewRateLimiter creates a new RateLimiter with default settings.
-func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{
+// RateLimitOption configures a RateLimiter value.
+type RateLimitOption func(*RateLimiter) error
+
+// WithRate sets the maximum number of requests per window.
+func WithRate(n int) RateLimitOption {
+	return func(rl *RateLimiter) error {
+		if n <= 0 {
+			return errors.New("rate must be positive")
+		}
+
+		rl.rate = n
+
+		return nil
+	}
+}
+
+// WithWindow sets the rate limiting window duration.
+func WithWindow(d time.Duration) RateLimitOption {
+	return func(rl *RateLimiter) error {
+		if d <= 0 {
+			return errors.New("window must be positive")
+		}
+
+		rl.window = d
+
+		return nil
+	}
+}
+
+// NewRateLimiter creates a new RateLimiter with the given options.
+func NewRateLimiter(opts ...RateLimitOption) (*RateLimiter, error) {
+	rl := &RateLimiter{
 		visitors: make(map[string]*visitor),
 		rate:     defaultRate,
 		window:   defaultWindow,
 	}
+
+	for _, opt := range opts {
+		if err := opt(rl); err != nil {
+			return nil, fmt.Errorf("apply option: %w", err)
+		}
+	}
+
+	return rl, nil
 }
 
 // Limit is an HTTP middleware that rate-limits requests by client IP.

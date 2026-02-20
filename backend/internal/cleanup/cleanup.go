@@ -2,11 +2,15 @@ package cleanup
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
 )
+
+const defaultInterval = 1 * time.Minute
 
 // Worker periodically deletes expired secrets from the database.
 type Worker struct {
@@ -16,14 +20,38 @@ type Worker struct {
 	done     chan struct{}
 }
 
-// NewWorker creates a new cleanup Worker.
-func NewWorker(repo repository.Repository, interval time.Duration) *Worker {
-	return &Worker{
+// Option configures a Worker value.
+type Option func(*Worker) error
+
+// WithInterval sets the cleanup interval.
+func WithInterval(d time.Duration) Option {
+	return func(w *Worker) error {
+		if d <= 0 {
+			return errors.New("interval must be positive")
+		}
+
+		w.interval = d
+
+		return nil
+	}
+}
+
+// New creates a new cleanup Worker.
+func New(repo repository.Repository, opts ...Option) (*Worker, error) {
+	w := &Worker{
 		repo:     repo,
-		interval: interval,
+		interval: defaultInterval,
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
 	}
+
+	for _, opt := range opts {
+		if err := opt(w); err != nil {
+			return nil, fmt.Errorf("apply option: %w", err)
+		}
+	}
+
+	return w, nil
 }
 
 // Start begins the periodic cleanup in a goroutine.

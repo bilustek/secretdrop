@@ -13,9 +13,11 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
 	"github.com/bilusteknoloji/secretdrop/internal/config"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilusteknoloji/secretdrop/internal/email/console"
+	"github.com/bilusteknoloji/secretdrop/internal/email/resend"
 	"github.com/bilusteknoloji/secretdrop/internal/handler"
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
 
@@ -25,6 +27,7 @@ var openAPISpec []byte
 const (
 	readHeaderTimeout   = 5 * time.Second
 	shutdownGracePeriod = 10 * time.Second
+	logKeyError         = "error"
 )
 
 func main() {
@@ -33,23 +36,44 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("load config", "error", err)
+		slog.Error("load config", logKeyError, err)
 		os.Exit(1)
 	}
 
-	repo, err := repository.NewSQLite(cfg.DatabaseURL)
+	repo, err := sqlite.New(cfg.DatabaseURL())
 	if err != nil {
-		slog.Error("open database", "error", err)
+		slog.Error("open database", logKeyError, err)
 		os.Exit(1)
 	}
 	defer func() {
-		if err := repo.Close(); err != nil {
-			slog.Error("close database", "error", err)
+		if closeErr := repo.Close(); closeErr != nil {
+			slog.Error("close database", logKeyError, closeErr)
 		}
 	}()
 
-	sender := email.NewResendSender(cfg.ResendAPIKey, cfg.FromEmail)
-	svc := service.NewSecretService(repo, sender, cfg.BaseURL, cfg.FromEmail, cfg.SecretExpiry)
+	var sender email.Sender
+	if cfg.IsDev() {
+		sender = console.New()
+		slog.Info("development mode: emails will be logged to console")
+	} else {
+		sender, err = resend.New(cfg.ResendAPIKey(), resend.WithFrom(cfg.FromEmail()))
+		if err != nil {
+			slog.Error("create email sender", logKeyError, err)
+			os.Exit(1)
+		}
+	}
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL(cfg.BaseURL()),
+		service.WithFromEmail(cfg.FromEmail()),
+		service.WithExpiry(cfg.SecretExpiry()),
+	)
+	if err != nil {
+		slog.Error("create service", logKeyError, err)
+		os.Exit(1)
+	}
+
 	h := handler.NewSecretHandler(svc)
 
 	mux := http.NewServeMux()
@@ -58,7 +82,11 @@ func main() {
 	handler.SetOpenAPISpec(openAPISpec)
 	handler.RegisterDocs(mux)
 
-	rl := middleware.NewRateLimiter()
+	rl, err := middleware.NewRateLimiter()
+	if err != nil {
+		slog.Error("create rate limiter", logKeyError, err)
+		os.Exit(1)
+	}
 
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
@@ -66,21 +94,26 @@ func main() {
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
 
-	addr := ":" + cfg.Port
+	addr := ":" + cfg.Port()
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           chain,
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
-	cleanupWorker := cleanup.NewWorker(repo, cfg.CleanupInterval)
+	cleanupWorker, err := cleanup.New(repo, cleanup.WithInterval(cfg.CleanupInterval()))
+	if err != nil {
+		slog.Error("create cleanup worker", logKeyError, err)
+		os.Exit(1)
+	}
+
 	cleanupWorker.Start()
 
 	go func() {
 		slog.Info("server starting", "addr", addr)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server failed", "error", err)
+			slog.Error("server failed", logKeyError, err)
 			os.Exit(1)
 		}
 	}()
@@ -97,7 +130,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("server forced to shutdown", "error", err)
+		slog.Error("server forced to shutdown", logKeyError, err)
 		os.Exit(1)
 	}
 

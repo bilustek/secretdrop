@@ -6,26 +6,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilusteknoloji/secretdrop/internal/email/noop"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
 
-func newTestService(t *testing.T) (*service.SecretService, *repository.SQLite, *email.NoopSender) {
+func newTestService(t *testing.T) (*service.SecretService, *sqlite.Repository, *noop.Sender) {
 	t.Helper()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
 
-	sender := &email.NoopSender{}
-	svc := service.NewSecretService(
-		repo, sender, "http://localhost:3000", "noreply@test.com", 10*time.Minute,
+	sender := noop.New()
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
 	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
 
 	return svc, repo, sender
 }
@@ -263,17 +270,24 @@ func TestCreateValidation(t *testing.T) {
 func TestRevealExpiredSecret(t *testing.T) {
 	t.Parallel()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
 
-	sender := &email.NoopSender{}
-	svc := service.NewSecretService(
-		repo, sender, "http://localhost:3000", "noreply@test.com", -1*time.Second,
+	sender := noop.New()
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(1*time.Millisecond),
 	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
 
 	ctx := context.Background()
 

@@ -1,4 +1,4 @@
-package repository_test
+package sqlite_test
 
 import (
 	"context"
@@ -7,19 +7,26 @@ import (
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 )
 
-func newTestRepo(t *testing.T) *repository.SQLite {
+func newTestRepo(t *testing.T) *sqlite.Repository {
 	t.Helper()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
 
 	return repo
+}
+
+func TestRepositoryImplementsInterface(t *testing.T) {
+	t.Parallel()
+
+	var _ repository.Repository = (*sqlite.Repository)(nil)
 }
 
 func TestStoreAndFind(t *testing.T) {

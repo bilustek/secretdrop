@@ -21,16 +21,20 @@ secretdrop/
 │   ├── go.mod / go.sum
 │   ├── .golangci.yml
 │   └── internal/
-│       ├── config/        # Env vars → Config struct
-│       ├── model/         # Domain models, request/response types, errors
-│       ├── crypt/         # HKDF + AES-256-GCM encrypt/decrypt
-│       ├── repository/    # Repository interface + SQLite implementation
-│       ├── email/         # Sender interface + Resend implementation
-│       ├── service/       # Business logic: create + reveal
-│       ├── handler/       # HTTP handlers + JSON helpers
-│       ├── middleware/     # RequestID, logging, content-type, rate limit
-│       └── cleanup/       # Ticker-based expired secret deletion
-├── frontend/              # React/TypeScript (TBD)
+│       ├── config/            # Config with functional options (env vars)
+│       ├── model/             # Domain models, request/response types, errors
+│       ├── crypt/             # HKDF + AES-256-GCM encrypt/decrypt
+│       ├── repository/        # Repository interface
+│       │   └── sqlite/        # SQLite implementation
+│       ├── email/             # Sender interface
+│       │   ├── resend/        # Resend API implementation
+│       │   ├── console/       # Console logger (development)
+│       │   └── noop/          # No-op sender (testing)
+│       ├── service/           # Business logic: create + reveal
+│       ├── handler/           # HTTP handlers + JSON helpers
+│       ├── middleware/        # RequestID, logging, content-type, rate limit
+│       └── cleanup/           # Ticker-based expired secret deletion
+├── frontend/                  # React/TypeScript (TBD)
 ├── .gitignore
 ├── .pre-commit-config.yaml
 └── CLAUDE.md
@@ -46,7 +50,8 @@ secretdrop/
 
 | Variable | Required | Default |
 |----------|----------|---------|
-| `RESEND_API_KEY` | Yes | — |
+| `GOLANG_ENV` | No | `production` |
+| `RESEND_API_KEY` | Yes (prod only) | — |
 | `PORT` | No | `8080` |
 | `DATABASE_URL` | No | `file:secretdrop.db?_journal_mode=WAL` |
 | `BASE_URL` | No | `http://localhost:3000` |
@@ -57,8 +62,13 @@ secretdrop/
 ## Running the Backend
 
 ```bash
+# Production
 cd backend
 RESEND_API_KEY=re_xxx go run .    # starts server on :8080
+
+# Development (no API key needed, emails logged to console)
+cd backend
+GOLANG_ENV=development go run .
 ```
 
 ## Development Commands

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const defaultExpiry = 10 * time.Minute
+
 // SecretService implements the core business logic for creating and revealing secrets.
 type SecretService struct {
 	repo      repository.Repository
@@ -23,21 +26,63 @@ type SecretService struct {
 	expiry    time.Duration
 }
 
-// NewSecretService creates a new SecretService.
-func NewSecretService(
-	repo repository.Repository,
-	sender email.Sender,
-	baseURL string,
-	fromEmail string,
-	expiry time.Duration,
-) *SecretService {
-	return &SecretService{
-		repo:      repo,
-		sender:    sender,
-		baseURL:   baseURL,
-		fromEmail: fromEmail,
-		expiry:    expiry,
+// Option configures a SecretService value.
+type Option func(*SecretService) error
+
+// WithBaseURL sets the base URL for generated links.
+func WithBaseURL(url string) Option {
+	return func(s *SecretService) error {
+		if url == "" {
+			return errors.New("base URL cannot be empty")
+		}
+
+		s.baseURL = url
+
+		return nil
 	}
+}
+
+// WithFromEmail sets the sender email address.
+func WithFromEmail(from string) Option {
+	return func(s *SecretService) error {
+		if from == "" {
+			return errors.New("from email cannot be empty")
+		}
+
+		s.fromEmail = from
+
+		return nil
+	}
+}
+
+// WithExpiry sets the secret expiration duration.
+func WithExpiry(d time.Duration) Option {
+	return func(s *SecretService) error {
+		if d <= 0 {
+			return errors.New("expiry must be positive")
+		}
+
+		s.expiry = d
+
+		return nil
+	}
+}
+
+// New creates a new SecretService with the given repository and email sender.
+func New(repo repository.Repository, sender email.Sender, opts ...Option) (*SecretService, error) {
+	s := &SecretService{
+		repo:   repo,
+		sender: sender,
+		expiry: defaultExpiry,
+	}
+
+	for _, opt := range opts {
+		if err := opt(s); err != nil {
+			return nil, fmt.Errorf("apply option: %w", err)
+		}
+	}
+
+	return s, nil
 }
 
 // Create encrypts the secret text for each recipient, stores it,

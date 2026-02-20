@@ -7,15 +7,15 @@ import (
 
 	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 )
 
 func TestWorkerCleansExpiredSecrets(t *testing.T) {
 	t.Parallel()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
@@ -46,7 +46,11 @@ func TestWorkerCleansExpiredSecrets(t *testing.T) {
 		t.Fatalf("Store(active) error = %v", err)
 	}
 
-	worker := cleanup.NewWorker(repo, 50*time.Millisecond)
+	worker, err := cleanup.New(repo, cleanup.WithInterval(50*time.Millisecond))
+	if err != nil {
+		t.Fatalf("cleanup.New() error = %v", err)
+	}
+
 	worker.Start()
 
 	time.Sleep(200 * time.Millisecond)
@@ -71,14 +75,18 @@ func TestWorkerCleansExpiredSecrets(t *testing.T) {
 func TestWorkerStopsGracefully(t *testing.T) {
 	t.Parallel()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
 
-	worker := cleanup.NewWorker(repo, 1*time.Hour)
+	worker, err := cleanup.New(repo, cleanup.WithInterval(1*time.Hour))
+	if err != nil {
+		t.Fatalf("cleanup.New() error = %v", err)
+	}
+
 	worker.Start()
 
 	done := make(chan struct{})

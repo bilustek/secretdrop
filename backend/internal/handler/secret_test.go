@@ -9,25 +9,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilusteknoloji/secretdrop/internal/email/noop"
 	"github.com/bilusteknoloji/secretdrop/internal/handler"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 )
 
 func newTestHandler(t *testing.T) (*handler.SecretHandler, *http.ServeMux) {
 	t.Helper()
 
-	repo, err := repository.NewSQLite(":memory:")
+	repo, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("NewSQLite() error = %v", err)
+		t.Fatalf("sqlite.New() error = %v", err)
 	}
 
 	t.Cleanup(func() { repo.Close() })
 
-	sender := &email.NoopSender{}
-	svc := service.NewSecretService(repo, sender, "http://localhost:3000", "noreply@test.com", 10*time.Minute)
+	sender := noop.New()
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
 	h := handler.NewSecretHandler(svc)
 
 	mux := http.NewServeMux()
