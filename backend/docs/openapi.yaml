@@ -14,7 +14,7 @@ info:
     - HKDF binds each key to the recipient's email — the same link cannot
       be opened by a different email address.
     - `recipient_hash` is SHA-256 of the email; the raw email is never stored.
-  version: "1.0.0"
+  version: "0.0.0"
   contact:
     name: Bilus Teknoloji
     url: https://github.com/bilusteknoloji/secretdrop

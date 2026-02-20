@@ -25,3 +25,6 @@ filename = "README.md"
 
 [[tool.bumpversion.files]]
 filename = "backend/internal/appinfo/version.go"
+
+[[tool.bumpversion.files]]
+filename = "backend/docs/openapi.yaml"
