@@ -208,3 +208,14 @@ secretdrop/
 ## License
 
 MIT — see [LICENCE](LICENCE) for details.
+
+## Rake Tasks
+
+`rake` runs default task: `run:backend`
+
+```bash
+rake -T
+
+rake run:backend  # run backend
+```
+
