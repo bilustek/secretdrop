@@ -234,6 +234,157 @@ func TestAuthenticate_ExpiredToken(t *testing.T) {
 	}
 }
 
+func TestOptionalAuthenticate_NoHeader(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	called := false
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+
+		_, ok := middleware.UserFromContext(r.Context())
+		if ok {
+			t.Error("UserFromContext() should return false when no header is present")
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("next handler should be called")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestOptionalAuthenticate_ValidToken(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	pair, err := svc.GenerateTokenPair(42, "user@example.com", "pro")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	var gotClaims *auth.Claims
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := middleware.UserFromContext(r.Context())
+		if !ok {
+			t.Error("UserFromContext() returned false")
+		}
+
+		gotClaims = claims
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if gotClaims == nil {
+		t.Fatal("claims should not be nil")
+	}
+
+	if gotClaims.UserID != 42 {
+		t.Errorf("UserID = %d; want 42", gotClaims.UserID)
+	}
+
+	if gotClaims.Email != "user@example.com" {
+		t.Errorf("Email = %q; want %q", gotClaims.Email, "user@example.com")
+	}
+}
+
+func TestOptionalAuthenticate_InvalidToken(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	called := false
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+
+		_, ok := middleware.UserFromContext(r.Context())
+		if ok {
+			t.Error("UserFromContext() should return false for invalid token")
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("next handler should be called even with invalid token")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestOptionalAuthenticate_NoBearerPrefix(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	called := false
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+
+		_, ok := middleware.UserFromContext(r.Context())
+		if ok {
+			t.Error("UserFromContext() should return false for non-Bearer auth")
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("next handler should be called")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
 func TestUserFromContext_Missing(t *testing.T) {
 	t.Parallel()
 
