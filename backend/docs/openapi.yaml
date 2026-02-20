@@ -14,6 +14,11 @@ info:
     - HKDF binds each key to the recipient's email — the same link cannot
       be opened by a different email address.
     - `recipient_hash` is SHA-256 of the email; the raw email is never stored.
+
+    ## Authentication
+
+    Most endpoints require a JWT Bearer token obtained via OAuth login
+    (Google or GitHub). Tokens are short-lived (15 min access, 30 day refresh).
   version: "0.0.0"
   contact:
     name: Bilus Teknoloji
@@ -34,6 +39,11 @@ paths:
 
         The link format is `{baseURL}/s/{token}#{base64url-key}`.
         The fragment (`#key`) is never sent to the server.
+
+        Requires authentication. Free tier allows 1 secret (lifetime),
+        Pro tier allows 100 secrets per month.
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -60,6 +70,22 @@ paths:
                     link: "http://localhost:3000/s/abc123#base64urlkey"
                   - email: "dev@team.com"
                     link: "http://localhost:3000/s/def456#base64urlkey2"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Secret creation limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: limit_reached
+                  message: "Secret creation limit reached"
         "415":
           description: Content-Type is not application/json
           content:
@@ -111,6 +137,8 @@ paths:
         plaintext, and **permanently deletes** the record from the database.
 
         A second call with the same token will return 404.
+
+        No authentication required — recipients may not have an account.
       parameters:
         - name: token
           in: path
@@ -176,6 +204,250 @@ paths:
                       type: already_viewed
                       message: "Secret has already been viewed"
 
+  /api/v1/me:
+    get:
+      operationId: getMe
+      summary: Get authenticated user profile
+      description: |
+        Returns the current user's profile including email, tier,
+        and usage information.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+              example:
+                email: "user@example.com"
+                name: "Jane Doe"
+                avatar_url: "https://avatars.githubusercontent.com/u/12345"
+                tier: "pro"
+                secrets_used: 23
+                secrets_limit: 100
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/google:
+    get:
+      operationId: authGoogle
+      summary: Initiate Google OAuth login
+      description: |
+        Redirects the user to Google's OAuth consent page.
+        After consent, Google redirects back to `/auth/google/callback`.
+      responses:
+        "307":
+          description: Redirect to Google OAuth
+
+  /auth/google/callback:
+    get:
+      operationId: authGoogleCallback
+      summary: Google OAuth callback
+      description: |
+        Handles the OAuth callback from Google. Exchanges the authorization code
+        for tokens, fetches user info, upserts the user, and returns a JWT pair.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: JWT token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: OAuth exchange failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Invalid OAuth state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/github:
+    get:
+      operationId: authGithub
+      summary: Initiate GitHub OAuth login
+      description: |
+        Redirects the user to GitHub's OAuth consent page.
+        After consent, GitHub redirects back to `/auth/github/callback`.
+      responses:
+        "307":
+          description: Redirect to GitHub OAuth
+
+  /auth/github/callback:
+    get:
+      operationId: authGithubCallback
+      summary: GitHub OAuth callback
+      description: |
+        Handles the OAuth callback from GitHub. Exchanges the authorization code
+        for tokens, fetches user info, upserts the user, and returns a JWT pair.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: JWT token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: OAuth exchange failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Invalid OAuth state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/token:
+    post:
+      operationId: authTokenExchange
+      summary: Exchange provider token for JWT (mobile)
+      description: |
+        Accepts a provider ID token (from Google or GitHub), verifies it with
+        the provider, upserts the user, and returns a JWT pair. Designed for
+        mobile apps that handle OAuth natively.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenExchangeRequest"
+            example:
+              provider: "google"
+              id_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: JWT token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "400":
+          description: Invalid request (missing provider or token)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Token verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billing/checkout:
+    post:
+      operationId: billingCheckout
+      summary: Create Stripe Checkout Session
+      description: |
+        Creates a Stripe Checkout Session for the Pro subscription plan
+        ($2.99/month) and returns the checkout URL. The user must be
+        authenticated.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Checkout session URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/URLResponse"
+              example:
+                url: "https://checkout.stripe.com/c/pay/cs_test_..."
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billing/portal:
+    post:
+      operationId: billingPortal
+      summary: Create Stripe Customer Portal session
+      description: |
+        Creates a Stripe Customer Portal session for managing the
+        subscription and returns the portal URL. The user must be
+        authenticated and have an active subscription.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Portal session URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/URLResponse"
+              example:
+                url: "https://billing.stripe.com/p/session/..."
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No active subscription found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billing/webhook:
+    post:
+      operationId: billingWebhook
+      summary: Stripe webhook handler
+      description: |
+        Receives and processes Stripe webhook events. Uses Stripe signature
+        verification instead of JWT auth. Handles:
+        - `checkout.session.completed` — creates subscription, sets tier to pro
+        - `invoice.paid` — resets monthly usage counter
+        - `customer.subscription.deleted` — sets tier to free
+        - `customer.subscription.updated` — updates subscription status
+      responses:
+        "200":
+          description: Webhook processed
+
   /healthz:
     get:
       operationId: healthCheck
@@ -191,8 +463,18 @@ paths:
                   status:
                     type: string
                     example: "ok"
+                  version:
+                    type: string
+                    example: "0.0.0"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained via OAuth login
+
   schemas:
     CreateRequest:
       type: object
@@ -261,6 +543,61 @@ components:
           type: string
           description: The decrypted secret text
 
+    MeResponse:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        tier:
+          type: string
+          enum:
+            - free
+            - pro
+        secrets_used:
+          type: integer
+        secrets_limit:
+          type: integer
+
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Short-lived JWT access token (15 min)
+        refresh_token:
+          type: string
+          description: Long-lived JWT refresh token (30 days)
+
+    TokenExchangeRequest:
+      type: object
+      required:
+        - provider
+        - id_token
+      properties:
+        provider:
+          type: string
+          enum:
+            - google
+            - github
+          description: OAuth provider name
+        id_token:
+          type: string
+          description: Provider-issued ID token or access token
+
+    URLResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: URL to redirect the user to
+
     ErrorResponse:
       type: object
       properties:
@@ -279,6 +616,8 @@ components:
                 - too_many_recipients
                 - invalid_email
                 - rate_limited
+                - limit_reached
+                - unauthorized
                 - internal_error
             message:
               type: string

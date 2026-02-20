@@ -1,0 +1,222 @@
+package auth
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/user"
+)
+
+const googleTokenInfoURL = "https://oauth2.googleapis.com/tokeninfo" //nolint:gosec // URL, not a credential
+
+// tokenExchangeRequest is the request body for POST /auth/token.
+type tokenExchangeRequest struct {
+	Provider string `json:"provider"`
+	IDToken  string `json:"id_token"`
+}
+
+// googleTokenInfo represents the response from Google's tokeninfo endpoint.
+type googleTokenInfo struct {
+	Sub     string `json:"sub"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
+	Aud     string `json:"aud"`
+}
+
+// HandleTokenExchange verifies a provider token and returns a JWT pair.
+// For Google: verifies the ID token via Google's tokeninfo endpoint.
+// For GitHub: uses the token as an access token to fetch user info from GitHub API.
+func (s *Service) HandleTokenExchange(userRepo user.Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req tokenExchangeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]string{"type": "validation_error", "message": "Invalid JSON body"},
+			})
+
+			return
+		}
+
+		if req.Provider == "" || req.IDToken == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]string{"type": "validation_error", "message": "provider and id_token are required"},
+			})
+
+			return
+		}
+
+		switch req.Provider {
+		case "google":
+			s.handleGoogleTokenExchange(w, r, req.IDToken, userRepo)
+		case "github":
+			s.handleGithubTokenExchange(w, r, req.IDToken, userRepo)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]string{
+					"type":    "validation_error",
+					"message": "Unsupported provider. Use 'google' or 'github'",
+				},
+			})
+		}
+	}
+}
+
+func (s *Service) handleGoogleTokenExchange(
+	w http.ResponseWriter, r *http.Request, idToken string, userRepo user.Repository,
+) {
+	info, err := verifyGoogleIDToken(r.Context(), idToken, s.googleClientID)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{
+			"error": map[string]string{"type": "oauth_failed", "message": "Failed to verify Google ID token"},
+		})
+
+		return
+	}
+
+	u, err := userRepo.Upsert(r.Context(), &model.User{
+		Provider:   "google",
+		ProviderID: info.Sub,
+		Email:      info.Email,
+		Name:       info.Name,
+		AvatarURL:  info.Picture,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"type": "internal_error", "message": "Failed to create user"},
+		})
+
+		return
+	}
+
+	pair, err := s.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"type": "internal_error", "message": "Failed to generate token"},
+		})
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pair)
+}
+
+func (s *Service) handleGithubTokenExchange(
+	w http.ResponseWriter, r *http.Request, accessToken string, userRepo user.Repository,
+) {
+	// Create an HTTP client with the access token in the Authorization header.
+	client := &http.Client{
+		Transport: &bearerTransport{
+			token: accessToken,
+			base:  http.DefaultTransport,
+		},
+	}
+
+	userInfo, err := fetchGithubUserInfo(r.Context(), client)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{
+			"error": map[string]string{"type": "oauth_failed", "message": "Failed to fetch GitHub user info"},
+		})
+
+		return
+	}
+
+	// If email is empty, fetch from /user/emails endpoint.
+	if userInfo.Email == "" {
+		email, emailErr := fetchGithubPrimaryEmail(r.Context(), client)
+		if emailErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"error": map[string]string{"type": "internal_error", "message": "Failed to fetch user email"},
+			})
+
+			return
+		}
+
+		userInfo.Email = email
+	}
+
+	// Use Name, fall back to Login if Name is empty.
+	name := userInfo.Name
+	if name == "" {
+		name = userInfo.Login
+	}
+
+	u, err := userRepo.Upsert(r.Context(), &model.User{
+		Provider:   "github",
+		ProviderID: strconv.FormatInt(userInfo.ID, 10),
+		Email:      userInfo.Email,
+		Name:       name,
+		AvatarURL:  userInfo.AvatarURL,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"type": "internal_error", "message": "Failed to create user"},
+		})
+
+		return
+	}
+
+	pair, err := s.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"type": "internal_error", "message": "Failed to generate token"},
+		})
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pair)
+}
+
+// bearerTransport is an http.RoundTripper that adds an Authorization header.
+type bearerTransport struct {
+	token string
+	base  http.RoundTripper
+}
+
+func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req2 := req.Clone(req.Context())
+	req2.Header.Set("Authorization", "Bearer "+t.token)
+
+	resp, err := t.base.RoundTrip(req2)
+	if err != nil {
+		return nil, fmt.Errorf("bearer transport: %w", err)
+	}
+
+	return resp, nil
+}
+
+func verifyGoogleIDToken(ctx context.Context, idToken, expectedAud string) (*googleTokenInfo, error) {
+	reqURL := googleTokenInfoURL + "?id_token=" + idToken
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create tokeninfo request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch google tokeninfo: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // best-effort close
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google tokeninfo returned status %d", resp.StatusCode)
+	}
+
+	var info googleTokenInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode google tokeninfo: %w", err)
+	}
+
+	// Validate audience to prevent tokens issued for other applications.
+	if expectedAud != "" && info.Aud != expectedAud {
+		return nil, fmt.Errorf("audience mismatch: got %q, want %q", info.Aud, expectedAud)
+	}
+
+	return &info, nil
+}

@@ -9,9 +9,9 @@ import (
 
 const (
 	defaultPort            = "8080"
-	defaultDatabaseURL     = "file:secretdrop.db?_journal_mode=WAL"
+	defaultDatabaseURL     = "file:db/secretdrop.db?_journal_mode=WAL"
 	defaultBaseURL         = "http://localhost:3000"
-	defaultFromEmail       = "SecretDrop <noreply@secretdrop.app>"
+	defaultFromEmail       = "SecretDrop <noreply@secretdrop.us>"
 	defaultSecretExpiry    = 10 * time.Minute
 	defaultCleanupInterval = 1 * time.Minute
 	defaultEnv             = "production"
@@ -27,6 +27,15 @@ type Config struct {
 	fromEmail       string
 	secretExpiry    time.Duration
 	cleanupInterval time.Duration
+
+	googleClientID      string
+	googleClientSecret  string
+	githubClientID      string
+	githubClientSecret  string
+	jwtSecret           string
+	stripeSecretKey     string
+	stripeWebhookSecret string
+	stripePriceID       string
 }
 
 // Option configures a Config value.
@@ -160,6 +169,30 @@ func (c *Config) SecretExpiry() time.Duration { return c.secretExpiry }
 // CleanupInterval returns the cleanup interval duration.
 func (c *Config) CleanupInterval() time.Duration { return c.cleanupInterval }
 
+// GoogleClientID returns the Google OAuth client ID.
+func (c *Config) GoogleClientID() string { return c.googleClientID }
+
+// GoogleClientSecret returns the Google OAuth client secret.
+func (c *Config) GoogleClientSecret() string { return c.googleClientSecret }
+
+// GithubClientID returns the GitHub OAuth client ID.
+func (c *Config) GithubClientID() string { return c.githubClientID }
+
+// GithubClientSecret returns the GitHub OAuth client secret.
+func (c *Config) GithubClientSecret() string { return c.githubClientSecret }
+
+// JWTSecret returns the JWT signing secret.
+func (c *Config) JWTSecret() string { return c.jwtSecret }
+
+// StripeSecretKey returns the Stripe secret key.
+func (c *Config) StripeSecretKey() string { return c.stripeSecretKey }
+
+// StripeWebhookSecret returns the Stripe webhook signing secret.
+func (c *Config) StripeWebhookSecret() string { return c.stripeWebhookSecret }
+
+// StripePriceID returns the Stripe price ID for the subscription plan.
+func (c *Config) StripePriceID() string { return c.stripePriceID }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -194,14 +227,37 @@ func Load(opts ...Option) (*Config, error) {
 		c.cleanupInterval = d
 	}
 
+	c.googleClientID = os.Getenv("GOOGLE_CLIENT_ID")
+	c.googleClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+	c.githubClientID = os.Getenv("GITHUB_CLIENT_ID")
+	c.githubClientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+	c.jwtSecret = os.Getenv("JWT_SECRET")
+	c.stripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
+	c.stripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+	c.stripePriceID = os.Getenv("STRIPE_PRICE_ID")
+
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
 			return nil, fmt.Errorf("apply option: %w", err)
 		}
 	}
 
-	if !c.IsDev() && c.resendAPIKey == "" {
-		return nil, errors.New("RESEND_API_KEY environment variable is required")
+	if !c.IsDev() {
+		for _, kv := range []struct{ name, val string }{
+			{"RESEND_API_KEY", c.resendAPIKey},
+			{"GOOGLE_CLIENT_ID", c.googleClientID},
+			{"GOOGLE_CLIENT_SECRET", c.googleClientSecret},
+			{"GITHUB_CLIENT_ID", c.githubClientID},
+			{"GITHUB_CLIENT_SECRET", c.githubClientSecret},
+			{"JWT_SECRET", c.jwtSecret},
+			{"STRIPE_SECRET_KEY", c.stripeSecretKey},
+			{"STRIPE_WEBHOOK_SECRET", c.stripeWebhookSecret},
+			{"STRIPE_PRICE_ID", c.stripePriceID},
+		} {
+			if kv.val == "" {
+				return nil, fmt.Errorf("%s environment variable is required", kv.name)
+			}
+		}
 	}
 
 	return c, nil
