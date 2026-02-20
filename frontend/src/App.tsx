@@ -5,6 +5,7 @@ import Landing from "./pages/Landing"
 import Dashboard from "./pages/Dashboard"
 import Reveal from "./pages/Reveal"
 import AuthCallback from "./pages/AuthCallback"
+import BillingSuccess from "./pages/BillingSuccess"
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="s/:token" element={<Reveal />} />
         <Route element={<ProtectedRoute />}>
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="billing/success" element={<BillingSuccess />} />
         </Route>
       </Route>
       <Route path="auth/callback" element={<AuthCallback />} />

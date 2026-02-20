@@ -78,14 +78,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleManageBilling = async () => {
-    try {
-      const { url } = await api.portal()
-      window.location.href = url
-    } catch {
-      setError("Failed to open billing portal. Please try again.")
-    }
-  }
 
   if (result) {
     return (
@@ -107,12 +99,52 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          {user.secrets_used < user.secrets_limit ? (
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="mt-6 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            >
+              Create Another
+            </button>
+          ) : user.tier === "free" ? (
+            <button
+              type="button"
+              onClick={handleUpgrade}
+              className="mt-6 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Upgrade to Pro for More Secrets
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="mt-6 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            >
+              Create Another
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const limitReached = user.secrets_used >= user.secrets_limit
+
+  if (limitReached && user.tier === "free") {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16">
+        <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
+          <h2 className="font-semibold text-lg mb-2">You've used your free secret</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Upgrade to Pro for up to {100} secrets per month.
+          </p>
           <button
             type="button"
-            onClick={() => setResult(null)}
-            className="mt-6 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            onClick={handleUpgrade}
+            className="px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
           >
-            Create Another
+            Upgrade to Pro
           </button>
         </div>
       </div>
@@ -186,44 +218,18 @@ export default function Dashboard() {
         </div>
       </form>
 
-      <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">
-              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 mr-2 uppercase">
-                {user.tier}
-              </span>
-              {user.secrets_used} / {user.secrets_limit} secrets used
-            </p>
-          </div>
-          {user.tier === "free" ? (
-            <button
-              type="button"
-              onClick={handleUpgrade}
-              className="text-sm font-medium text-gray-900 dark:text-white hover:underline"
-            >
-              Upgrade to Pro
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleManageBilling}
-              className="text-sm text-gray-500 hover:underline"
-            >
-              Manage Billing
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 text-center">
-        <button
-          type="button"
-          onClick={auth.logout}
-          className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          Sign Out
-        </button>
+      <div className="mt-8 flex items-center justify-between text-sm text-gray-500">
+        <p>
+          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 mr-2 uppercase">
+            {user.tier}
+          </span>
+          {user.secrets_used} / {user.secrets_limit} secrets used
+        </p>
+        {user.tier === "free" && (
+          <button type="button" onClick={handleUpgrade} className="font-medium text-gray-900 dark:text-white hover:underline">
+            Upgrade to Pro
+          </button>
+        )}
       </div>
     </div>
   )

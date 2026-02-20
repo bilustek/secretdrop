@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useState, type ReactNode } from "react"
+import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 type Theme = "light" | "dark"
 
@@ -11,20 +11,24 @@ export const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light"
-  if (localStorage.theme === "dark") return "dark"
-  if (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark"
-  return "light"
+  const stored = localStorage.getItem("theme")
+  if (stored === "dark" || stored === "light") return stored
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
+  const userToggled = useRef(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark")
-    localStorage.theme = theme
+    if (userToggled.current) {
+      localStorage.setItem("theme", theme)
+    }
   }, [theme])
 
   const toggle = useCallback(() => {
+    userToggled.current = true
     setTheme((prev) => (prev === "dark" ? "light" : "dark"))
   }, [])
 
