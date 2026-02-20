@@ -229,6 +229,7 @@ func setupBilling(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.R
 		userRepo,
 		billing.WithSuccessURL(cfg.FrontendBaseURL()+"/billing/success"),
 		billing.WithCancelURL(cfg.FrontendBaseURL()+"/billing/cancel"),
+		billing.WithPortalReturnURL(cfg.FrontendBaseURL()+"/dashboard"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create billing service: %w", err)

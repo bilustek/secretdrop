@@ -75,12 +75,13 @@ type Option func(*Service) error
 
 // Service handles Stripe billing operations.
 type Service struct {
-	priceID       string
-	webhookSecret string
-	userRepo      user.Repository
-	stripeClient  StripeClient
-	successURL    string
-	cancelURL     string
+	priceID         string
+	webhookSecret   string
+	userRepo        user.Repository
+	stripeClient    StripeClient
+	successURL      string
+	cancelURL       string
+	portalReturnURL string
 }
 
 // New creates a new billing Service.
@@ -132,6 +133,15 @@ func WithSuccessURL(url string) Option {
 func WithCancelURL(url string) Option {
 	return func(s *Service) error {
 		s.cancelURL = url
+
+		return nil
+	}
+}
+
+// WithPortalReturnURL sets the URL to redirect to after leaving the customer portal.
+func WithPortalReturnURL(url string) Option {
+	return func(s *Service) error {
+		s.portalReturnURL = url
 
 		return nil
 	}
@@ -230,7 +240,8 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 		}
 
 		params := &stripe.BillingPortalSessionCreateParams{
-			Customer: stripe.String(sub.StripeCustomerID),
+			Customer:  stripe.String(sub.StripeCustomerID),
+			ReturnURL: stripe.String(s.portalReturnURL),
 		}
 
 		sess, err := s.stripeClient.CreatePortalSession(r.Context(), params)
