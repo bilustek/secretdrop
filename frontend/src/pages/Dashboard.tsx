@@ -1,5 +1,5 @@
 import { use, useState, type FormEvent } from "react"
-import { Plus, X, Loader2, Copy, Check } from "lucide-react"
+import { Plus, X, Loader2, Copy, Check, Rocket } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { api, AppError, type CreateSecretResponse } from "../api/client"
 
@@ -112,8 +112,9 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={handleUpgrade}
-              className="mt-6 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
+              className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
             >
+              <Rocket size={16} />
               Upgrade to Pro for More Secrets
             </button>
           ) : (
@@ -143,8 +144,9 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={handleUpgrade}
-            className="px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
           >
+            <Rocket size={18} />
             Upgrade to Pro
           </button>
         </div>
@@ -230,8 +232,9 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={handleUpgrade}
-            className="px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
           >
+            <Rocket size={14} />
             Upgrade to Pro
           </button>
         )}
