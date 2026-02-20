@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
@@ -397,5 +398,282 @@ func TestUpdateTier(t *testing.T) {
 
 	if found.Tier != model.TierPro {
 		t.Errorf("Tier = %q; want %q", found.Tier, model.TierPro)
+	}
+}
+
+func createTestUserAndSubscription(t *testing.T, repo *sqlite.Repository) (*model.User, *model.Subscription) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "github",
+		ProviderID: "gh-sub-1",
+		Email:      "sub@example.com",
+		Name:       "Sub User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	sub := &model.Subscription{
+		UserID:               u.ID,
+		StripeCustomerID:     "cus_test123",
+		StripeSubscriptionID: "sub_test456",
+		Status:               model.SubscriptionActive,
+		CurrentPeriodStart:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CurrentPeriodEnd:     time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	if err := repo.UpsertSubscription(ctx, sub); err != nil {
+		t.Fatalf("UpsertSubscription() error = %v", err)
+	}
+
+	return u, sub
+}
+
+func TestUpsertSubscription(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "github",
+		ProviderID: "gh-upsub",
+		Email:      "upsub@example.com",
+		Name:       "Upsub User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	periodStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+
+	sub := &model.Subscription{
+		UserID:               u.ID,
+		StripeCustomerID:     "cus_abc",
+		StripeSubscriptionID: "sub_xyz",
+		Status:               model.SubscriptionActive,
+		CurrentPeriodStart:   periodStart,
+		CurrentPeriodEnd:     periodEnd,
+	}
+
+	if err := repo.UpsertSubscription(ctx, sub); err != nil {
+		t.Fatalf("UpsertSubscription() error = %v", err)
+	}
+
+	found, err := repo.FindSubscriptionByUserID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindSubscriptionByUserID() error = %v", err)
+	}
+
+	if found.ID == 0 {
+		t.Error("ID should not be zero")
+	}
+
+	if found.UserID != u.ID {
+		t.Errorf("UserID = %d; want %d", found.UserID, u.ID)
+	}
+
+	if found.StripeCustomerID != "cus_abc" {
+		t.Errorf("StripeCustomerID = %q; want %q", found.StripeCustomerID, "cus_abc")
+	}
+
+	if found.StripeSubscriptionID != "sub_xyz" {
+		t.Errorf("StripeSubscriptionID = %q; want %q", found.StripeSubscriptionID, "sub_xyz")
+	}
+
+	if found.Status != model.SubscriptionActive {
+		t.Errorf("Status = %q; want %q", found.Status, model.SubscriptionActive)
+	}
+
+	if !found.CurrentPeriodStart.Equal(periodStart) {
+		t.Errorf("CurrentPeriodStart = %v; want %v", found.CurrentPeriodStart, periodStart)
+	}
+
+	if !found.CurrentPeriodEnd.Equal(periodEnd) {
+		t.Errorf("CurrentPeriodEnd = %v; want %v", found.CurrentPeriodEnd, periodEnd)
+	}
+
+	if found.CreatedAt.IsZero() {
+		t.Error("CreatedAt should not be zero")
+	}
+}
+
+func TestUpsertSubscription_Update(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "github",
+		ProviderID: "gh-updup",
+		Email:      "updup@example.com",
+		Name:       "Updup User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	// Initial insert.
+	sub := &model.Subscription{
+		UserID:               u.ID,
+		StripeCustomerID:     "cus_dup",
+		StripeSubscriptionID: "sub_dup",
+		Status:               model.SubscriptionActive,
+		CurrentPeriodStart:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CurrentPeriodEnd:     time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	if err := repo.UpsertSubscription(ctx, sub); err != nil {
+		t.Fatalf("UpsertSubscription() first call error = %v", err)
+	}
+
+	// Upsert with same stripe_subscription_id but updated fields.
+	newPeriodStart := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	newPeriodEnd := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	updated := &model.Subscription{
+		UserID:               u.ID,
+		StripeCustomerID:     "cus_dup",
+		StripeSubscriptionID: "sub_dup",
+		Status:               model.SubscriptionPastDue,
+		CurrentPeriodStart:   newPeriodStart,
+		CurrentPeriodEnd:     newPeriodEnd,
+	}
+
+	if err := repo.UpsertSubscription(ctx, updated); err != nil {
+		t.Fatalf("UpsertSubscription() second call error = %v", err)
+	}
+
+	found, err := repo.FindSubscriptionByUserID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindSubscriptionByUserID() error = %v", err)
+	}
+
+	if found.Status != model.SubscriptionPastDue {
+		t.Errorf("Status = %q; want %q", found.Status, model.SubscriptionPastDue)
+	}
+
+	if !found.CurrentPeriodStart.Equal(newPeriodStart) {
+		t.Errorf("CurrentPeriodStart = %v; want %v", found.CurrentPeriodStart, newPeriodStart)
+	}
+
+	if !found.CurrentPeriodEnd.Equal(newPeriodEnd) {
+		t.Errorf("CurrentPeriodEnd = %v; want %v", found.CurrentPeriodEnd, newPeriodEnd)
+	}
+}
+
+func TestFindSubscriptionByUserID(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	u, sub := createTestUserAndSubscription(t, repo)
+	ctx := context.Background()
+
+	found, err := repo.FindSubscriptionByUserID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindSubscriptionByUserID() error = %v", err)
+	}
+
+	if found.UserID != u.ID {
+		t.Errorf("UserID = %d; want %d", found.UserID, u.ID)
+	}
+
+	if found.StripeCustomerID != sub.StripeCustomerID {
+		t.Errorf("StripeCustomerID = %q; want %q", found.StripeCustomerID, sub.StripeCustomerID)
+	}
+
+	if found.StripeSubscriptionID != sub.StripeSubscriptionID {
+		t.Errorf("StripeSubscriptionID = %q; want %q", found.StripeSubscriptionID, sub.StripeSubscriptionID)
+	}
+
+	if found.Status != model.SubscriptionActive {
+		t.Errorf("Status = %q; want %q", found.Status, model.SubscriptionActive)
+	}
+}
+
+func TestFindSubscriptionByUserID_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.FindSubscriptionByUserID(ctx, 99999)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("FindSubscriptionByUserID() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestFindUserByStripeCustomerID(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	u, sub := createTestUserAndSubscription(t, repo)
+	ctx := context.Background()
+
+	found, err := repo.FindUserByStripeCustomerID(ctx, sub.StripeCustomerID)
+	if err != nil {
+		t.Fatalf("FindUserByStripeCustomerID() error = %v", err)
+	}
+
+	if found.ID != u.ID {
+		t.Errorf("ID = %d; want %d", found.ID, u.ID)
+	}
+
+	if found.Email != u.Email {
+		t.Errorf("Email = %q; want %q", found.Email, u.Email)
+	}
+
+	if found.Provider != u.Provider {
+		t.Errorf("Provider = %q; want %q", found.Provider, u.Provider)
+	}
+}
+
+func TestFindUserByStripeCustomerID_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.FindUserByStripeCustomerID(ctx, "cus_nonexistent")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("FindUserByStripeCustomerID() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestUpdateSubscriptionStatus(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	_, sub := createTestUserAndSubscription(t, repo)
+	ctx := context.Background()
+
+	if err := repo.UpdateSubscriptionStatus(ctx, sub.StripeSubscriptionID, model.SubscriptionCanceled); err != nil {
+		t.Fatalf("UpdateSubscriptionStatus() error = %v", err)
+	}
+
+	found, err := repo.FindSubscriptionByUserID(ctx, sub.UserID)
+	if err != nil {
+		t.Fatalf("FindSubscriptionByUserID() error = %v", err)
+	}
+
+	if found.Status != model.SubscriptionCanceled {
+		t.Errorf("Status = %q; want %q", found.Status, model.SubscriptionCanceled)
+	}
+}
+
+func TestUpdateSubscriptionStatus_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.UpdateSubscriptionStatus(ctx, "sub_nonexistent", model.SubscriptionCanceled)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("UpdateSubscriptionStatus() error = %v; want model.ErrNotFound", err)
 	}
 }

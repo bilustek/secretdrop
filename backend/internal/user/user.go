@@ -14,4 +14,9 @@ type Repository interface {
 	IncrementSecretsUsed(ctx context.Context, id int64) error
 	ResetSecretsUsed(ctx context.Context, id int64) error
 	UpdateTier(ctx context.Context, id int64, tier string) error
+
+	UpsertSubscription(ctx context.Context, sub *model.Subscription) error
+	FindSubscriptionByUserID(ctx context.Context, userID int64) (*model.Subscription, error)
+	FindUserByStripeCustomerID(ctx context.Context, customerID string) (*model.User, error)
+	UpdateSubscriptionStatus(ctx context.Context, stripeSubID, status string) error
 }

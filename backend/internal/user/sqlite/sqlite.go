@@ -27,7 +27,21 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE(provider, provider_id)
 );
 CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider, provider_id);
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id                INTEGER NOT NULL REFERENCES users(id),
+    stripe_customer_id     TEXT    NOT NULL,
+    stripe_subscription_id TEXT    NOT NULL UNIQUE,
+    status                 TEXT    NOT NULL DEFAULT 'active',
+    current_period_start   DATETIME NOT NULL,
+    current_period_end     DATETIME NOT NULL,
+    created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id);
 `
+
+const errFmtRowsAffected = "rows affected: %w"
 
 // compile-time interface check.
 var _ user.Repository = (*Repository)(nil)
@@ -174,7 +188,7 @@ func (r *Repository) IncrementSecretsUsed(ctx context.Context, id int64) error {
 
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
+		return fmt.Errorf(errFmtRowsAffected, err)
 	}
 
 	if n == 0 {
@@ -195,7 +209,7 @@ func (r *Repository) ResetSecretsUsed(ctx context.Context, id int64) error {
 
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
+		return fmt.Errorf(errFmtRowsAffected, err)
 	}
 
 	if n == 0 {
@@ -216,7 +230,130 @@ func (r *Repository) UpdateTier(ctx context.Context, id int64, tier string) erro
 
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpsertSubscription inserts a new subscription or updates an existing one matched by stripe_subscription_id.
+func (r *Repository) UpsertSubscription(ctx context.Context, sub *model.Subscription) error {
+	const query = `
+		INSERT INTO subscriptions
+			(user_id, stripe_customer_id, stripe_subscription_id,
+			 status, current_period_start, current_period_end)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(stripe_subscription_id) DO UPDATE SET
+			status               = excluded.status,
+			current_period_start = excluded.current_period_start,
+			current_period_end   = excluded.current_period_end
+	`
+
+	_, err := r.db.ExecContext(ctx, query,
+		sub.UserID,
+		sub.StripeCustomerID,
+		sub.StripeSubscriptionID,
+		sub.Status,
+		sub.CurrentPeriodStart,
+		sub.CurrentPeriodEnd,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert subscription: %w", err)
+	}
+
+	return nil
+}
+
+// FindSubscriptionByUserID retrieves a subscription by user ID.
+// Returns model.ErrNotFound if no subscription exists.
+func (r *Repository) FindSubscriptionByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
+	const query = `
+		SELECT id, user_id, stripe_customer_id,
+			stripe_subscription_id, status,
+			current_period_start, current_period_end,
+			created_at
+		FROM subscriptions
+		WHERE user_id = ?
+	`
+
+	s := &model.Subscription{}
+
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&s.ID,
+		&s.UserID,
+		&s.StripeCustomerID,
+		&s.StripeSubscriptionID,
+		&s.Status,
+		&s.CurrentPeriodStart,
+		&s.CurrentPeriodEnd,
+		&s.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("query subscription by user id: %w", err)
+	}
+
+	return s, nil
+}
+
+// FindUserByStripeCustomerID retrieves a user by their Stripe customer ID
+// via the subscriptions table. Returns model.ErrNotFound if no user exists.
+func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID string) (*model.User, error) {
+	const query = `
+		SELECT u.id, u.provider, u.provider_id,
+			u.email, u.name, u.avatar_url,
+			u.tier, u.secrets_used,
+			u.created_at, u.updated_at
+		FROM users u
+		JOIN subscriptions s ON u.id = s.user_id
+		WHERE s.stripe_customer_id = ?
+	`
+
+	u := &model.User{}
+
+	err := r.db.QueryRowContext(ctx, query, customerID).Scan(
+		&u.ID,
+		&u.Provider,
+		&u.ProviderID,
+		&u.Email,
+		&u.Name,
+		&u.AvatarURL,
+		&u.Tier,
+		&u.SecretsUsed,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("query user by stripe customer id: %w", err)
+	}
+
+	return u, nil
+}
+
+// UpdateSubscriptionStatus updates the status of a subscription by its Stripe subscription ID.
+// Returns model.ErrNotFound if no subscription exists with the given ID.
+func (r *Repository) UpdateSubscriptionStatus(ctx context.Context, stripeSubID, status string) error {
+	const query = `UPDATE subscriptions SET status = ? WHERE stripe_subscription_id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, status, stripeSubID)
+	if err != nil {
+		return fmt.Errorf("update subscription status: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
 	}
 
 	if n == 0 {
