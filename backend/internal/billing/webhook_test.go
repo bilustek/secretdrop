@@ -122,6 +122,10 @@ func (m *webhookUserRepo) UpdateSubscriptionPeriod(_ context.Context, subID stri
 	return m.updateSubPeriodErr
 }
 
+func (m *webhookUserRepo) DeleteUser(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
+}
+
 const (
 	testWebhookSecret   = "whsec_test_secret"
 	testEventCreatedVal = 1_234_567_890

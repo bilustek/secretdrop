@@ -38,6 +38,10 @@ func (m *mockStripeClient) CreatePortalSession(
 	return m.portalSession, m.portalErr
 }
 
+func (m *mockStripeClient) CancelSubscription(_ context.Context, _ string) error {
+	return nil
+}
+
 // mockUserRepo is a minimal test double for user.Repository.
 type mockUserRepo struct {
 	subscription    *model.Subscription
@@ -85,6 +89,10 @@ func (m *mockUserRepo) UpdateSubscriptionStatus(_ context.Context, _, _ string) 
 }
 
 func (m *mockUserRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, _ time.Time) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) DeleteUser(_ context.Context, _ int64) error {
 	return errors.New("not implemented")
 }
 

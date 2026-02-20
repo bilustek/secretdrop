@@ -243,6 +243,41 @@ func (r *Repository) UpdateTier(ctx context.Context, id int64, tier string) erro
 	return nil
 }
 
+// DeleteUser deletes a user and their subscriptions within a transaction.
+// Returns model.ErrNotFound if no user exists with the given ID.
+func (r *Repository) DeleteUser(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	defer func() { _ = tx.Rollback() }()
+
+	if _, execErr := tx.ExecContext(ctx, "DELETE FROM subscriptions WHERE user_id = ?", id); execErr != nil {
+		return fmt.Errorf("delete subscriptions: %w", execErr)
+	}
+
+	result, err := tx.ExecContext(ctx, "DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return fmt.Errorf("commit tx: %w", commitErr)
+	}
+
+	return nil
+}
+
 // UpsertSubscription inserts a new subscription or updates an existing one matched by stripe_subscription_id.
 func (r *Repository) UpsertSubscription(ctx context.Context, sub *model.Subscription) error {
 	const query = `

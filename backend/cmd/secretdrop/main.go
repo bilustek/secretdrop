@@ -145,9 +145,18 @@ func Run() error {
 	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
 
 	// Billing routes (conditional — only in non-dev mode)
-	if billingErr := registerBillingRoutes(mux, cfg, userRepo); billingErr != nil {
+	billingSvc, billingErr := setupBilling(mux, cfg, userRepo)
+	if billingErr != nil {
 		return billingErr
 	}
+
+	// Delete account route (uses billing service for subscription cancellation)
+	var canceller handler.SubscriptionCanceller
+	if billingSvc != nil {
+		canceller = billingSvc
+	}
+
+	mux.HandleFunc("DELETE /api/v1/me", handler.NewDeleteAccountHandler(userRepo, canceller))
 
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
@@ -203,14 +212,14 @@ func Run() error {
 	return nil
 }
 
-// registerBillingRoutes creates the billing service and registers Stripe
-// routes. In development mode the routes are skipped entirely since Stripe
-// credentials are not available.
-func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.Repository) error {
+// setupBilling creates the billing service and registers Stripe routes.
+// In development mode the routes are skipped entirely since Stripe
+// credentials are not available, and nil is returned for the service.
+func setupBilling(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.Repository) (*billing.Service, error) {
 	if cfg.StripeSecretKey() == "" || cfg.StripeWebhookSecret() == "" || cfg.StripePriceID() == "" {
 		slog.Info("billing routes disabled (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, or STRIPE_PRICE_ID not set)")
 
-		return nil
+		return nil, nil
 	}
 
 	billingSvc, err := billing.New(
@@ -222,7 +231,7 @@ func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *use
 		billing.WithCancelURL(cfg.FrontendBaseURL()+"/billing/cancel"),
 	)
 	if err != nil {
-		return fmt.Errorf("create billing service: %w", err)
+		return nil, fmt.Errorf("create billing service: %w", err)
 	}
 
 	// Webhook is public (Stripe signature verification)
@@ -232,7 +241,7 @@ func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *use
 	mux.HandleFunc("POST /billing/checkout", billingSvc.HandleCheckout())
 	mux.HandleFunc("POST /billing/portal", billingSvc.HandlePortal())
 
-	return nil
+	return billingSvc, nil
 }
 
 // dbDir extracts the directory from a SQLite DSN like "file:db/secretdrop.db?_journal_mode=WAL".

@@ -406,6 +406,10 @@ func (m *mockUserRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, 
 	return errors.New("not implemented")
 }
 
+func (m *mockUserRepo) DeleteUser(_ context.Context, _ int64) error {
+	return errors.New("not implemented")
+}
+
 // errorResponse is a helper type for decoding error JSON responses.
 type errorResponse struct {
 	Error struct {
