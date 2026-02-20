@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/slack"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
 )
 
@@ -17,7 +19,7 @@ type SubscriptionCanceller interface {
 }
 
 // NewDeleteAccountHandler returns a handler for DELETE /api/v1/me.
-func NewDeleteAccountHandler(userRepo user.Repository, canceller SubscriptionCanceller) http.HandlerFunc {
+func NewDeleteAccountHandler(userRepo user.Repository, canceller SubscriptionCanceller, notifier slack.Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := middleware.UserFromContext(r.Context())
 		if !ok {
@@ -48,6 +50,22 @@ func NewDeleteAccountHandler(userRepo user.Repository, canceller SubscriptionCan
 			}
 
 			return
+		}
+
+		if notifier != nil {
+			go func() {
+				ev := slack.Event{
+					Type:    slack.EventUserDeleted,
+					Message: "User account deleted",
+					Fields: map[string]string{
+						"user_id": strconv.FormatInt(claims.UserID, 10),
+						"email":   claims.Email,
+					},
+				}
+				if err := notifier.Notify(context.Background(), ev); err != nil {
+					slog.Warn("send slack notification", "error", err)
+				}
+			}()
 		}
 
 		w.WriteHeader(http.StatusNoContent)
