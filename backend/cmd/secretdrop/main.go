@@ -12,6 +12,8 @@ import (
 
 	"github.com/bilusteknoloji/secretdrop/docs"
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
+	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	"github.com/bilusteknoloji/secretdrop/internal/billing"
 	"github.com/bilusteknoloji/secretdrop/internal/cleanup"
 	"github.com/bilusteknoloji/secretdrop/internal/config"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
@@ -21,6 +23,7 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
+	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
 const (
@@ -54,6 +57,29 @@ func Run() error {
 		}
 	}()
 
+	// User repository (shares the same SQLite database file)
+	userRepo, err := usersqlite.New(cfg.DatabaseURL())
+	if err != nil {
+		return fmt.Errorf("open user database: %w", err)
+	}
+	defer func() {
+		if closeErr := userRepo.Close(); closeErr != nil {
+			slog.Error("close user database", "error", closeErr)
+		}
+	}()
+
+	// Auth service (JWT)
+	jwtSecret := cfg.JWTSecret()
+	if cfg.IsDev() && jwtSecret == "" {
+		jwtSecret = "dev-jwt-secret-do-not-use-in-production" //nolint:gosec // safe default for dev only
+		slog.Warn("using default JWT secret for development mode")
+	}
+
+	authSvc, err := auth.New(jwtSecret)
+	if err != nil {
+		return fmt.Errorf("create auth service: %w", err)
+	}
+
 	var sender email.Sender
 	if cfg.IsDev() {
 		sender = console.New()
@@ -70,18 +96,42 @@ func Run() error {
 		service.WithBaseURL(cfg.BaseURL()),
 		service.WithFromEmail(cfg.FromEmail()),
 		service.WithExpiry(cfg.SecretExpiry()),
+		service.WithUserRepo(userRepo),
 	)
 	if err != nil {
 		return fmt.Errorf("create service: %w", err)
 	}
 
-	h := handler.NewSecretHandler(svc, nil)
+	h := handler.NewSecretHandler(svc, userRepo)
 
 	mux := http.NewServeMux()
 	h.Register(mux)
 
 	handler.SetOpenAPISpec(docs.OpenAPISpec)
 	handler.RegisterDocs(mux)
+
+	// OAuth routes (public — no auth required)
+	googleCfg := auth.GoogleConfig(
+		cfg.GoogleClientID(),
+		cfg.GoogleClientSecret(),
+		cfg.BaseURL()+"/auth/google/callback",
+	)
+	githubCfg := auth.GithubConfig(
+		cfg.GithubClientID(),
+		cfg.GithubClientSecret(),
+		cfg.BaseURL()+"/auth/github/callback",
+	)
+
+	mux.HandleFunc("GET /auth/google", authSvc.HandleGoogleLogin(googleCfg))
+	mux.HandleFunc("GET /auth/google/callback", authSvc.HandleGoogleCallback(googleCfg, userRepo))
+	mux.HandleFunc("GET /auth/github", authSvc.HandleGithubLogin(githubCfg))
+	mux.HandleFunc("GET /auth/github/callback", authSvc.HandleGithubCallback(githubCfg, userRepo))
+	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
+
+	// Billing routes (conditional — only in non-dev mode)
+	if billingErr := registerBillingRoutes(mux, cfg, userRepo); billingErr != nil {
+		return billingErr
+	}
 
 	rl, err := middleware.NewRateLimiter()
 	if err != nil {
@@ -90,6 +140,7 @@ func Run() error {
 
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
+	chain = middleware.OptionalAuthenticate(authSvc)(chain)
 	chain = rl.Limit(chain)
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
@@ -138,6 +189,38 @@ func Run() error {
 	}
 
 	slog.Info("server stopped gracefully")
+
+	return nil
+}
+
+// registerBillingRoutes creates the billing service and registers Stripe
+// routes. In development mode the routes are skipped entirely since Stripe
+// credentials are not available.
+func registerBillingRoutes(mux *http.ServeMux, cfg *config.Config, userRepo *usersqlite.Repository) error {
+	if cfg.IsDev() {
+		slog.Info("development mode: billing routes disabled")
+
+		return nil
+	}
+
+	billingSvc, err := billing.New(
+		cfg.StripeSecretKey(),
+		cfg.StripeWebhookSecret(),
+		cfg.StripePriceID(),
+		userRepo,
+		billing.WithSuccessURL(cfg.BaseURL()+"/billing/success"),
+		billing.WithCancelURL(cfg.BaseURL()+"/billing/cancel"),
+	)
+	if err != nil {
+		return fmt.Errorf("create billing service: %w", err)
+	}
+
+	// Webhook is public (Stripe signature verification)
+	mux.HandleFunc("POST /billing/webhook", billingSvc.HandleWebhook())
+
+	// Checkout and portal require auth (enforced at handler level)
+	mux.HandleFunc("POST /billing/checkout", billingSvc.HandleCheckout())
+	mux.HandleFunc("POST /billing/portal", billingSvc.HandlePortal())
 
 	return nil
 }
