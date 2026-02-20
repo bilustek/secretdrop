@@ -90,22 +90,20 @@ func TestUpsert_NewUser(t *testing.T) {
 	}
 }
 
-func TestUpsert_ExistingUser(t *testing.T) {
+func TestUpsert_SameEmailDifferentProvider(t *testing.T) {
 	t.Parallel()
 
 	repo := newTestRepo(t)
 	ctx := context.Background()
 
-	// Insert initial user.
-	initial := &model.User{
-		Provider:   "github",
-		ProviderID: "gh-456",
+	// First login via Google.
+	first, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "google-456",
 		Email:      "bob@example.com",
-		Name:       "Bob",
-		AvatarURL:  "https://example.com/bob.png",
-	}
-
-	first, err := repo.Upsert(ctx, initial)
+		Name:       "Bob Google",
+		AvatarURL:  "https://example.com/bob-google.png",
+	})
 	if err != nil {
 		t.Fatalf("Upsert() first call error = %v", err)
 	}
@@ -119,34 +117,37 @@ func TestUpsert_ExistingUser(t *testing.T) {
 		t.Fatalf("IncrementSecretsUsed() error = %v", err)
 	}
 
-	// Upsert with same provider+providerID but different name/email/avatar.
-	updated := &model.User{
+	// Second login via GitHub with same email — should find existing user.
+	second, err := repo.Upsert(ctx, &model.User{
 		Provider:   "github",
-		ProviderID: "gh-456",
-		Email:      "bob-new@example.com",
-		Name:       "Bob Updated",
-		AvatarURL:  "https://example.com/bob-new.png",
-	}
-
-	second, err := repo.Upsert(ctx, updated)
+		ProviderID: "gh-789",
+		Email:      "bob@example.com",
+		Name:       "Bob GitHub",
+		AvatarURL:  "https://example.com/bob-github.png",
+	})
 	if err != nil {
 		t.Fatalf("Upsert() second call error = %v", err)
 	}
 
 	if second.ID != first.ID {
-		t.Errorf("ID = %d; want %d (same user)", second.ID, first.ID)
+		t.Errorf("ID = %d; want %d (same user by email)", second.ID, first.ID)
 	}
 
-	if second.Email != "bob-new@example.com" {
-		t.Errorf("Email = %q; want %q", second.Email, "bob-new@example.com")
+	// Provider and provider_id should be updated to the latest login.
+	if second.Provider != "github" {
+		t.Errorf("Provider = %q; want %q", second.Provider, "github")
 	}
 
-	if second.Name != "Bob Updated" {
-		t.Errorf("Name = %q; want %q", second.Name, "Bob Updated")
+	if second.ProviderID != "gh-789" {
+		t.Errorf("ProviderID = %q; want %q", second.ProviderID, "gh-789")
 	}
 
-	if second.AvatarURL != "https://example.com/bob-new.png" {
-		t.Errorf("AvatarURL = %q; want %q", second.AvatarURL, "https://example.com/bob-new.png")
+	if second.Name != "Bob GitHub" {
+		t.Errorf("Name = %q; want %q", second.Name, "Bob GitHub")
+	}
+
+	if second.AvatarURL != "https://example.com/bob-github.png" {
+		t.Errorf("AvatarURL = %q; want %q", second.AvatarURL, "https://example.com/bob-github.png")
 	}
 
 	// Tier and secrets_used must be preserved.

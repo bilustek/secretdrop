@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS users (
     secrets_used INTEGER NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(provider, provider_id)
+    UNIQUE(email)
 );
-CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider, provider_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS subscriptions (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id                INTEGER NOT NULL REFERENCES users(id),
@@ -69,14 +69,16 @@ func New(dsn string) (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-// Upsert inserts a new user or updates an existing one matched by provider and provider_id.
-// On conflict, only email, name, and avatar_url are updated; tier and secrets_used are preserved.
+// Upsert inserts a new user or updates an existing one matched by email.
+// On conflict, provider, provider_id, name, and avatar_url are updated;
+// tier and secrets_used are preserved.
 func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, error) {
 	const query = `
 		INSERT INTO users (provider, provider_id, email, name, avatar_url)
 		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(provider, provider_id) DO UPDATE SET
-			email      = excluded.email,
+		ON CONFLICT(email) DO UPDATE SET
+			provider   = excluded.provider,
+			provider_id = excluded.provider_id,
 			name       = excluded.name,
 			avatar_url = excluded.avatar_url,
 			updated_at = CURRENT_TIMESTAMP
