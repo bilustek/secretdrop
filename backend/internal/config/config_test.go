@@ -43,6 +43,38 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.CleanupInterval() != 1*time.Minute {
 		t.Errorf("CleanupInterval() = %v; want 1m", cfg.CleanupInterval())
 	}
+
+	if cfg.GoogleClientID() != "" {
+		t.Errorf("GoogleClientID() = %q; want empty", cfg.GoogleClientID())
+	}
+
+	if cfg.GoogleClientSecret() != "" {
+		t.Errorf("GoogleClientSecret() = %q; want empty", cfg.GoogleClientSecret())
+	}
+
+	if cfg.GithubClientID() != "" {
+		t.Errorf("GithubClientID() = %q; want empty", cfg.GithubClientID())
+	}
+
+	if cfg.GithubClientSecret() != "" {
+		t.Errorf("GithubClientSecret() = %q; want empty", cfg.GithubClientSecret())
+	}
+
+	if cfg.JWTSecret() != "" {
+		t.Errorf("JWTSecret() = %q; want empty", cfg.JWTSecret())
+	}
+
+	if cfg.StripeSecretKey() != "" {
+		t.Errorf("StripeSecretKey() = %q; want empty", cfg.StripeSecretKey())
+	}
+
+	if cfg.StripeWebhookSecret() != "" {
+		t.Errorf("StripeWebhookSecret() = %q; want empty", cfg.StripeWebhookSecret())
+	}
+
+	if cfg.StripePriceID() != "" {
+		t.Errorf("StripePriceID() = %q; want empty", cfg.StripePriceID())
+	}
 }
 
 func TestLoadWithAllEnvVars(t *testing.T) {
@@ -54,6 +86,14 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 	t.Setenv("FROM_EMAIL", "test@example.com")
 	t.Setenv("SECRET_EXPIRY", "30m")
 	t.Setenv("CLEANUP_INTERVAL", "5m")
+	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("GITHUB_CLIENT_ID", "github-id")
+	t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
+	t.Setenv("JWT_SECRET", "jwt-secret-key")
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
+	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -86,6 +126,38 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 
 	if cfg.CleanupInterval() != 5*time.Minute {
 		t.Errorf("CleanupInterval() = %v; want 5m", cfg.CleanupInterval())
+	}
+
+	if cfg.GoogleClientID() != "google-id" {
+		t.Errorf("GoogleClientID() = %q; want %q", cfg.GoogleClientID(), "google-id")
+	}
+
+	if cfg.GoogleClientSecret() != "google-secret" {
+		t.Errorf("GoogleClientSecret() = %q; want %q", cfg.GoogleClientSecret(), "google-secret")
+	}
+
+	if cfg.GithubClientID() != "github-id" {
+		t.Errorf("GithubClientID() = %q; want %q", cfg.GithubClientID(), "github-id")
+	}
+
+	if cfg.GithubClientSecret() != "github-secret" {
+		t.Errorf("GithubClientSecret() = %q; want %q", cfg.GithubClientSecret(), "github-secret")
+	}
+
+	if cfg.JWTSecret() != "jwt-secret-key" {
+		t.Errorf("JWTSecret() = %q; want %q", cfg.JWTSecret(), "jwt-secret-key")
+	}
+
+	if cfg.StripeSecretKey() != "sk_test_123" {
+		t.Errorf("StripeSecretKey() = %q; want %q", cfg.StripeSecretKey(), "sk_test_123")
+	}
+
+	if cfg.StripeWebhookSecret() != "whsec_123" {
+		t.Errorf("StripeWebhookSecret() = %q; want %q", cfg.StripeWebhookSecret(), "whsec_123")
+	}
+
+	if cfg.StripePriceID() != "price_123" {
+		t.Errorf("StripePriceID() = %q; want %q", cfg.StripePriceID(), "price_123")
 	}
 }
 
@@ -130,6 +202,14 @@ func TestIsDev(t *testing.T) {
 func TestIsDevFalseInProduction(t *testing.T) {
 	t.Setenv("GOLANG_ENV", "production")
 	t.Setenv("RESEND_API_KEY", "re_test")
+	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("GITHUB_CLIENT_ID", "github-id")
+	t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
+	t.Setenv("JWT_SECRET", "jwt-secret-key")
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
+	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -166,6 +246,14 @@ func TestLoadInvalidCleanupInterval(t *testing.T) {
 func TestWithEnv(t *testing.T) {
 	t.Setenv("GOLANG_ENV", "development")
 	t.Setenv("RESEND_API_KEY", "re_test")
+	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("GITHUB_CLIENT_ID", "github-id")
+	t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
+	t.Setenv("JWT_SECRET", "jwt-secret-key")
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
+	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load(config.WithEnv("staging"))
 	if err != nil {
@@ -352,5 +440,66 @@ func TestWithCleanupIntervalInvalid(t *testing.T) {
 	_, err := config.Load(config.WithCleanupInterval(0))
 	if err == nil {
 		t.Fatal("WithCleanupInterval(0) should fail")
+	}
+}
+
+func TestLoadProductionRequiresAuthVars(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "production")
+	t.Setenv("RESEND_API_KEY", "re_test_key")
+
+	// Auth and billing vars are not set, should fail
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load() should fail without auth vars in production")
+	}
+}
+
+func TestLoadProductionWithAllVars(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "production")
+	t.Setenv("RESEND_API_KEY", "re_test_key")
+	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("GITHUB_CLIENT_ID", "github-id")
+	t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
+	t.Setenv("JWT_SECRET", "jwt-secret-key")
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
+	t.Setenv("STRIPE_PRICE_ID", "price_123")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.GoogleClientID() != "google-id" {
+		t.Errorf("GoogleClientID() = %q; want %q", cfg.GoogleClientID(), "google-id")
+	}
+
+	if cfg.GoogleClientSecret() != "google-secret" {
+		t.Errorf("GoogleClientSecret() = %q; want %q", cfg.GoogleClientSecret(), "google-secret")
+	}
+
+	if cfg.GithubClientID() != "github-id" {
+		t.Errorf("GithubClientID() = %q; want %q", cfg.GithubClientID(), "github-id")
+	}
+
+	if cfg.GithubClientSecret() != "github-secret" {
+		t.Errorf("GithubClientSecret() = %q; want %q", cfg.GithubClientSecret(), "github-secret")
+	}
+
+	if cfg.JWTSecret() != "jwt-secret-key" {
+		t.Errorf("JWTSecret() = %q; want %q", cfg.JWTSecret(), "jwt-secret-key")
+	}
+
+	if cfg.StripeSecretKey() != "sk_test_123" {
+		t.Errorf("StripeSecretKey() = %q; want %q", cfg.StripeSecretKey(), "sk_test_123")
+	}
+
+	if cfg.StripeWebhookSecret() != "whsec_123" {
+		t.Errorf("StripeWebhookSecret() = %q; want %q", cfg.StripeWebhookSecret(), "whsec_123")
+	}
+
+	if cfg.StripePriceID() != "price_123" {
+		t.Errorf("StripePriceID() = %q; want %q", cfg.StripePriceID(), "price_123")
 	}
 }
