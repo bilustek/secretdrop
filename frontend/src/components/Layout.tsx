@@ -1,5 +1,5 @@
 import { use, useEffect, useRef, useState } from "react"
-import { Link, Outlet, useNavigate } from "react-router"
+import { Link, Outlet, useLocation, useNavigate } from "react-router"
 import { Lock, CreditCard, LogOut } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { ThemeToggle } from "./ThemeToggle"
@@ -12,6 +12,11 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
