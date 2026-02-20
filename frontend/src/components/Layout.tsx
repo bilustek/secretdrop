@@ -4,6 +4,7 @@ import { Lock, CreditCard, LogOut, Trash2, User } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { ThemeToggle } from "./ThemeToggle"
 import { api } from "../api/client"
+import { VERSION } from "../version"
 
 export function Layout() {
   const auth = use(AuthContext)
@@ -147,6 +148,7 @@ export function Layout() {
             <Link to="/contact" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Contact
             </Link>
+            <span className="text-gray-400 dark:text-gray-600">v{VERSION}</span>
           </nav>
         </div>
       </footer>
