@@ -114,7 +114,7 @@ export default function Reveal() {
           Enter your email to reveal it. This secret will be permanently deleted after viewing.
         </p>
 
-        <form onSubmit={handleReveal}>
+        <form onSubmit={handleReveal} className="max-w-sm mx-auto">
           <input
             type="email"
             value={email}
