@@ -3,8 +3,10 @@ package model
 import "time"
 
 const (
-	// MaxTextLength is the maximum allowed size for secret text (4KB).
-	MaxTextLength = 4096
+	// FreeMaxTextLength is the maximum secret text length for free tier (4KB).
+	FreeMaxTextLength = 4096
+	// ProMaxTextLength is the maximum secret text length for pro tier (64KB).
+	ProMaxTextLength = 65536
 	// FreeMaxRecipients is the maximum number of recipients for free tier.
 	FreeMaxRecipients = 1
 	// ProMaxRecipients is the maximum number of recipients for pro tier.

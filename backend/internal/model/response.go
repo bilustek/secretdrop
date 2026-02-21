@@ -29,6 +29,7 @@ type MeResponse struct {
 	SecretsUsed     int    `json:"secrets_used"`
 	SecretsLimit    int    `json:"secrets_limit"`
 	RecipientsLimit int    `json:"recipients_limit"`
+	MaxTextLength   int    `json:"max_text_length"`
 }
 
 // ErrorResponse is the standard error envelope.

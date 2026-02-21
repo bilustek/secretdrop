@@ -219,7 +219,7 @@ func TestCreateValidation(t *testing.T) {
 		{
 			name: "text too long",
 			req: &model.CreateRequest{
-				Text: strings.Repeat("x", model.MaxTextLength+1),
+				Text: strings.Repeat("x", model.ProMaxTextLength+1),
 				To:   []string{"a@b.com"},
 			},
 			wantType: "text_too_long",

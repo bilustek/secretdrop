@@ -58,6 +58,7 @@ export interface MeResponse {
   tier: string
   secrets_used: number
   secrets_limit: number
+  max_text_length: number
 }
 
 export interface CreateSecretRequest {

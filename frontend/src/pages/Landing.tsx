@@ -265,6 +265,7 @@ export default function Landing() {
             <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li>5 secrets (lifetime)</li>
               <li>1 recipient per secret</li>
+              <li>Up to 4KB per secret</li>
               <li>AES-256-GCM encryption</li>
             </ul>
             <button
@@ -285,6 +286,7 @@ export default function Landing() {
             <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li>100 secrets per month</li>
               <li>Up to 5 recipients</li>
+              <li>Up to 64KB per secret</li>
               <li>AES-256-GCM encryption</li>
             </ul>
             <button

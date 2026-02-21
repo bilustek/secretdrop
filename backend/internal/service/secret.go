@@ -106,6 +106,7 @@ func (s *SecretService) Create(
 	req *model.CreateRequest,
 ) (*model.CreateResponse, error) {
 	maxRecipients := model.ProMaxRecipients
+	maxTextLength := model.ProMaxTextLength
 
 	if s.userRepo != nil {
 		u, err := s.userRepo.FindByID(ctx, userID)
@@ -131,9 +132,10 @@ func (s *SecretService) Create(
 		}
 
 		maxRecipients = u.RecipientsLimit()
+		maxTextLength = u.MaxTextLength()
 	}
 
-	if err := validateCreateRequest(req, maxRecipients); err != nil {
+	if err := validateCreateRequest(req, maxRecipients, maxTextLength); err != nil {
 		return nil, err
 	}
 
@@ -284,7 +286,7 @@ func (s *SecretService) createForRecipient(
 	}, nil
 }
 
-func validateCreateRequest(req *model.CreateRequest, maxRecipients int) error {
+func validateCreateRequest(req *model.CreateRequest, maxRecipients, maxTextLength int) error {
 	if len(req.Text) == 0 {
 		return &model.AppError{
 			Type:       "validation_error",
@@ -293,10 +295,10 @@ func validateCreateRequest(req *model.CreateRequest, maxRecipients int) error {
 		}
 	}
 
-	if len(req.Text) > model.MaxTextLength {
+	if len(req.Text) > maxTextLength {
 		return &model.AppError{
 			Type:       "text_too_long",
-			Message:    "Text exceeds maximum length of 4KB",
+			Message:    fmt.Sprintf("Text exceeds maximum length of %dKB", maxTextLength/1024),
 			StatusCode: model.StatusUnprocessableEntity,
 		}
 	}

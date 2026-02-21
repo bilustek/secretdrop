@@ -219,6 +219,7 @@ paths:
                 secrets_used: 23
                 secrets_limit: 100
                 recipients_limit: 10
+                max_text_length: 65536
         "401":
           description: Authentication required
           content:
@@ -808,8 +809,8 @@ components:
       properties:
         text:
           type: string
-          maxLength: 4096
-          description: The secret text to encrypt (max 4KB)
+          maxLength: 65536
+          description: The secret text to encrypt (free 4KB, pro 64KB)
         to:
           type: array
           items:
@@ -888,6 +889,9 @@ components:
         recipients_limit:
           type: integer
           description: Maximum recipients per secret (from tier limits)
+        max_text_length:
+          type: integer
+          description: Maximum secret text length in characters (free 4096, pro 65536)
 
     TokenPair:
       type: object

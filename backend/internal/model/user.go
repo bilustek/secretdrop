@@ -64,6 +64,15 @@ func (u *User) CanCreateSecret() bool {
 	return u.SecretsUsed < u.SecretsLimit()
 }
 
+// MaxTextLength returns the maximum secret text length for this user's tier.
+func (u *User) MaxTextLength() int {
+	if u.Tier == TierPro {
+		return ProMaxTextLength
+	}
+
+	return FreeMaxTextLength
+}
+
 // RecipientsLimit returns the maximum number of recipients per secret.
 // Priority: limits table > hardcoded fallback.
 func (u *User) RecipientsLimit() int {
