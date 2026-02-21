@@ -72,6 +72,10 @@ secretdrop/
 - `POST /billing/checkout` — Stripe checkout session (auth required)
 - `POST /billing/portal` — Stripe customer portal (auth required)
 - `POST /billing/webhook` — Stripe webhook handler
+- `GET /api/v1/admin/users` — List users with search/filter/sort/pagination (admin auth)
+- `PATCH /api/v1/admin/users/{id}` — Update user tier (admin auth)
+- `GET /api/v1/admin/subscriptions` — List subscriptions with filter/sort/pagination (admin auth)
+- `DELETE /api/v1/admin/subscriptions/{id}` — Cancel subscription (admin auth)
 - `GET /healthz` — Health check (200)
 
 ## Environment Variables
@@ -97,6 +101,8 @@ secretdrop/
 | `STRIPE_PRICE_ID` | Yes (prod only) | — |
 | `SLACK_WEBHOOK_SUBSCRIPTIONS` | No | — |
 | `SLACK_WEBHOOK_NOTIFICATIONS` | No | — |
+| `ADMIN_USERNAME` | No | — |
+| `ADMIN_PASSWORD` | No | — |
 
 ## Running the Backend
 
