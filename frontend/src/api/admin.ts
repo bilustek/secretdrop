@@ -113,7 +113,7 @@ export const adminApi = {
   },
 
   fetchUsers: (params: UserListParams = {}) =>
-    adminRequest<AdminUsersResponse>(`/users${buildQuery(params)}`),
+    adminRequest<AdminUsersResponse>(`/users${buildQuery(params as Record<string, string | number | undefined>)}`),
 
   updateTier: (id: number, tier: string) =>
     adminRequest<{ status: string }>(`/users/${id}`, {
@@ -122,7 +122,7 @@ export const adminApi = {
     }),
 
   fetchSubscriptions: (params: SubscriptionListParams = {}) =>
-    adminRequest<AdminSubscriptionsResponse>(`/subscriptions${buildQuery(params)}`),
+    adminRequest<AdminSubscriptionsResponse>(`/subscriptions${buildQuery(params as Record<string, string | number | undefined>)}`),
 
   cancelSubscription: (id: number) =>
     adminRequest<void>(`/subscriptions/${id}`, { method: "DELETE" }),
