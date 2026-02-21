@@ -41,6 +41,9 @@ type Config struct {
 
 	slackWebhookSubscriptions string
 	slackWebhookNotifications string
+
+	adminUsername string
+	adminPassword string
 }
 
 // Option configures a Config value.
@@ -220,6 +223,12 @@ func (c *Config) SlackWebhookSubscriptions() string { return c.slackWebhookSubsc
 // SlackWebhookNotifications returns the Slack webhook URL for error notifications.
 func (c *Config) SlackWebhookNotifications() string { return c.slackWebhookNotifications }
 
+// AdminUsername returns the admin Basic Auth username.
+func (c *Config) AdminUsername() string { return c.adminUsername }
+
+// AdminPassword returns the admin Basic Auth password.
+func (c *Config) AdminPassword() string { return c.adminPassword }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -266,6 +275,9 @@ func Load(opts ...Option) (*Config, error) {
 
 	c.slackWebhookSubscriptions = os.Getenv("SLACK_WEBHOOK_SUBSCRIPTIONS")
 	c.slackWebhookNotifications = os.Getenv("SLACK_WEBHOOK_NOTIFICATIONS")
+
+	c.adminUsername = os.Getenv("ADMIN_USERNAME")
+	c.adminPassword = os.Getenv("ADMIN_PASSWORD")
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {

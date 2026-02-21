@@ -31,6 +31,12 @@ linters:
         - lostcancel
         - slog
         - unreachable
+    gosec:
+      excludes:
+        - G117 # false positive on token response struct fields
+        - G202 # SQL concatenation with whitelisted sort columns
+        - G704 # SSRF false positive — URLs come from config/OAuth
+        - G706 # log injection false positive — structured slog calls
     errcheck:
       check-type-assertions: true
       exclude-functions:

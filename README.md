@@ -73,32 +73,64 @@ export STRIPE_PRICE_ID=price_xxx
 
 export SLACK_WEBHOOK_SUBSCRIPTIONS="https://hooks.slack.com/services/xxx"
 export SLACK_WEBHOOK_NOTIFICATIONS="https://hooks.slack.com/services/xxx"
+
+# Admin (optional — enables admin panel and protects /docs)
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=change-me-to-a-strong-password
 ```
 
 ## API Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/secrets` | Yes | Create an encrypted secret |
+| `POST` | `/api/v1/secrets` | Bearer | Create an encrypted secret |
 | `POST` | `/api/v1/secrets/{token}/reveal` | No | Reveal and burn a secret |
-| `GET`  | `/api/v1/me` | Yes | Authenticated user profile |
+| `GET`  | `/api/v1/me` | Bearer | Authenticated user profile |
 | `GET`  | `/auth/google` | No | Google OAuth login redirect |
 | `GET`  | `/auth/google/callback` | No | Google OAuth callback |
 | `GET`  | `/auth/github` | No | GitHub OAuth login redirect |
 | `GET`  | `/auth/github/callback` | No | GitHub OAuth callback |
 | `POST` | `/auth/token` | No | Mobile token exchange |
-| `POST` | `/billing/checkout` | Yes | Create Stripe checkout session |
-| `POST` | `/billing/portal` | Yes | Stripe customer portal |
+| `POST` | `/billing/checkout` | Bearer | Create Stripe checkout session |
+| `POST` | `/billing/portal` | Bearer | Stripe customer portal |
 | `POST` | `/billing/webhook` | No | Stripe webhook handler |
 | `GET`  | `/healthz` | No | Health check |
-| `GET`  | `/docs` | No | API documentation (Scalar UI) |
-| `GET`  | `/docs/openapi.yaml` | No | OpenAPI 3.1 spec |
+| `DELETE` | `/api/v1/me` | Bearer | Delete user account |
+| `POST` | `/api/v1/contact` | No | Send contact form message |
+| `GET`  | `/api/v1/admin/users` | Basic | List users (search/filter/sort/pagination) |
+| `PATCH` | `/api/v1/admin/users/{id}` | Basic | Update user tier |
+| `GET`  | `/api/v1/admin/subscriptions` | Basic | List subscriptions (filter/sort/pagination) |
+| `DELETE` | `/api/v1/admin/subscriptions/{id}` | Basic | Cancel subscription |
+| `GET`  | `/docs` | Basic* | API documentation (Scalar UI) |
+| `GET`  | `/docs/openapi.yaml` | Basic* | OpenAPI 3.1 spec |
+
+**Auth types:**
+- **Bearer** — JWT access token via `Authorization: Bearer <token>` header (obtained through OAuth)
+- **Basic** — HTTP Basic Auth via `Authorization: Basic <base64>` header (admin credentials from env vars)
+- **Basic\*** — Protected only when `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set; public otherwise
+
+### Authentication Flow
+
+1. User visits `/auth/google` or `/auth/github` to start OAuth
+2. After consent, the callback returns a JWT token pair (access + refresh)
+3. Use the access token in subsequent API requests:
+
+```bash
+# Get token via OAuth callback (browser flow) or mobile token exchange:
+curl -s -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "google", "id_token": "..."}' | jq .
+
+# Response:
+# { "access_token": "eyJ...", "refresh_token": "eyJ..." }
+```
 
 ### Example: Create a Secret
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/secrets \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJ..." \
   -d '{
     "text": "DB_PASSWORD=super-secret",
     "to": ["alice@example.com"]
@@ -139,6 +171,52 @@ curl -s -X POST http://localhost:8080/api/v1/secrets/{token}/reveal \
 ```
 
 A second request to the same endpoint returns `404` — the secret has been deleted.
+
+### Example: Admin — List Users
+
+```bash
+curl -s -u admin:secret http://localhost:8080/api/v1/admin/users?tier=pro | jq .
+```
+
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "jane@example.com",
+      "name": "Jane Doe",
+      "provider": "google",
+      "tier": "pro",
+      "secrets_used": 23,
+      "created_at": "2026-02-20T10:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+### Example: Admin — Update User Tier
+
+```bash
+curl -s -u admin:secret -X PATCH http://localhost:8080/api/v1/admin/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"tier": "pro"}' | jq .
+```
+
+### Example: Admin — List Subscriptions
+
+```bash
+curl -s -u admin:secret http://localhost:8080/api/v1/admin/subscriptions?status=active | jq .
+```
+
+### Example: Admin — Cancel Subscription
+
+```bash
+curl -s -u admin:secret -X DELETE http://localhost:8080/api/v1/admin/subscriptions/1
+# Returns 204 No Content
+```
 
 ## Development
 

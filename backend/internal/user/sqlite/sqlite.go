@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
@@ -42,10 +43,17 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id);
 `
 
-const errFmtRowsAffected = "rows affected: %w"
+const (
+	errFmtRowsAffected = "rows affected: %w"
+	sqlWhere           = " WHERE "
+	sqlAnd             = " AND "
+)
 
-// compile-time interface check.
-var _ user.Repository = (*Repository)(nil)
+// compile-time interface checks.
+var (
+	_ user.Repository      = (*Repository)(nil)
+	_ user.AdminRepository = (*Repository)(nil)
+)
 
 // Repository implements user.Repository using a SQLite database.
 type Repository struct {
@@ -424,6 +432,227 @@ func (r *Repository) UpdateSubscriptionPeriod(ctx context.Context, stripeSubID s
 	}
 
 	return nil
+}
+
+// Allowed sort columns for users (whitelist to prevent SQL injection).
+var userSortColumns = map[string]string{
+	"created_at":   "created_at",
+	"email":        "email",
+	"name":         "name",
+	"tier":         "tier",
+	"secrets_used": "secrets_used",
+}
+
+// Allowed sort columns for subscriptions.
+var subscriptionSortColumns = map[string]string{
+	"created_at": "s.created_at",
+	"status":     "s.status",
+}
+
+// ListUsers returns a paginated list of users with optional search, filter, and sort.
+func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]*model.User, error) {
+	q := user.ApplyOptions(opts...)
+
+	query := "SELECT id, provider, provider_id, email, name, avatar_url," +
+		" tier, secrets_used, created_at, updated_at FROM users"
+	var args []any
+	var clauses []string
+
+	if q.Search != "" {
+		clauses = append(clauses, "email LIKE ?")
+		args = append(args, "%"+q.Search+"%")
+	}
+
+	if q.Tier != "" {
+		clauses = append(clauses, "tier = ?")
+		args = append(args, q.Tier)
+	}
+
+	if len(clauses) > 0 {
+		query += sqlWhere + strings.Join(clauses, sqlAnd)
+	}
+
+	col := userSortColumns[q.Sort]
+	if col == "" {
+		col = "created_at"
+	}
+
+	order := "DESC"
+	if strings.EqualFold(q.Order, "asc") {
+		order = "ASC"
+	}
+
+	query += " ORDER BY " + col + " " + order
+
+	if q.PerPage > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, q.PerPage, (q.Page-1)*q.PerPage)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	var users []*model.User
+
+	for rows.Next() {
+		u := &model.User{}
+		if err := rows.Scan(
+			&u.ID, &u.Provider, &u.ProviderID, &u.Email,
+			&u.Name, &u.AvatarURL, &u.Tier, &u.SecretsUsed,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+
+		users = append(users, u)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+
+	return users, nil
+}
+
+// CountUsers returns the total count of users matching the given options.
+func (r *Repository) CountUsers(ctx context.Context, opts ...user.ListOption) (int64, error) {
+	q := user.ApplyOptions(opts...)
+
+	query := "SELECT COUNT(*) FROM users"
+	var args []any
+	var clauses []string
+
+	if q.Search != "" {
+		clauses = append(clauses, "email LIKE ?")
+		args = append(args, "%"+q.Search+"%")
+	}
+
+	if q.Tier != "" {
+		clauses = append(clauses, "tier = ?")
+		args = append(args, q.Tier)
+	}
+
+	if len(clauses) > 0 {
+		query += sqlWhere + strings.Join(clauses, sqlAnd)
+	}
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count users: %w", err)
+	}
+
+	return count, nil
+}
+
+// ListSubscriptions returns a paginated list of subscriptions with user info.
+func (r *Repository) ListSubscriptions(
+	ctx context.Context,
+	opts ...user.ListOption,
+) ([]*user.SubscriptionWithUser, error) {
+	q := user.ApplyOptions(opts...)
+
+	query := `SELECT s.id, s.user_id, s.stripe_customer_id,
+		s.stripe_subscription_id, s.status,
+		s.current_period_start, s.current_period_end,
+		s.created_at, u.email, u.name
+		FROM subscriptions s
+		JOIN users u ON s.user_id = u.id`
+	var args []any
+	var clauses []string
+
+	if q.Status != "" {
+		clauses = append(clauses, "s.status = ?")
+		args = append(args, q.Status)
+	}
+
+	if q.Search != "" {
+		clauses = append(clauses, "u.email LIKE ?")
+		args = append(args, "%"+q.Search+"%")
+	}
+
+	if len(clauses) > 0 {
+		query += sqlWhere + strings.Join(clauses, sqlAnd)
+	}
+
+	col := subscriptionSortColumns[q.Sort]
+	if col == "" {
+		col = "s.created_at"
+	}
+
+	order := "DESC"
+	if strings.EqualFold(q.Order, "asc") {
+		order = "ASC"
+	}
+
+	query += " ORDER BY " + col + " " + order
+
+	if q.PerPage > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, q.PerPage, (q.Page-1)*q.PerPage)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list subscriptions: %w", err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	var subs []*user.SubscriptionWithUser
+
+	for rows.Next() {
+		s := &user.SubscriptionWithUser{}
+		if err := rows.Scan(
+			&s.ID, &s.UserID, &s.StripeCustomerID,
+			&s.StripeSubscriptionID, &s.Status,
+			&s.CurrentPeriodStart, &s.CurrentPeriodEnd,
+			&s.CreatedAt, &s.UserEmail, &s.UserName,
+		); err != nil {
+			return nil, fmt.Errorf("scan subscription: %w", err)
+		}
+
+		subs = append(subs, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subscriptions: %w", err)
+	}
+
+	return subs, nil
+}
+
+// CountSubscriptions returns the total count of subscriptions matching the given options.
+func (r *Repository) CountSubscriptions(ctx context.Context, opts ...user.ListOption) (int64, error) {
+	q := user.ApplyOptions(opts...)
+
+	query := `SELECT COUNT(*) FROM subscriptions s JOIN users u ON s.user_id = u.id`
+	var args []any
+	var clauses []string
+
+	if q.Status != "" {
+		clauses = append(clauses, "s.status = ?")
+		args = append(args, q.Status)
+	}
+
+	if q.Search != "" {
+		clauses = append(clauses, "u.email LIKE ?")
+		args = append(args, "%"+q.Search+"%")
+	}
+
+	if len(clauses) > 0 {
+		query += sqlWhere + strings.Join(clauses, sqlAnd)
+	}
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count subscriptions: %w", err)
+	}
+
+	return count, nil
 }
 
 // Close closes the database connection.
