@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { ArrowUp, ArrowDown } from "lucide-react"
-import { adminApi, type AdminUser, type AdminUsersResponse } from "../../api/admin"
+import { ArrowUp, ArrowDown, Pencil, X } from "lucide-react"
+import { adminApi, type AdminUser, type AdminUsersResponse, type TierLimits } from "../../api/admin"
 import { ConfirmModal } from "../../components/ConfirmModal"
 
 const PER_PAGE = 20
@@ -19,6 +19,9 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [confirmUser, setConfirmUser] = useState<AdminUser | null>(null)
   const [actionError, setActionError] = useState("")
+  const [tiers, setTiers] = useState<TierLimits[]>([])
+  const [editLimitUserId, setEditLimitUserId] = useState<number | null>(null)
+  const [editLimitValue, setEditLimitValue] = useState("")
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -43,6 +46,10 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
+
+  useEffect(() => {
+    adminApi.fetchLimits().then(setTiers).catch(() => {})
+  }, [])
 
   // Debounced search
   const [searchInput, setSearchInput] = useState("")
@@ -77,6 +84,27 @@ export default function AdminUsers() {
     }
   }
 
+  const handleLimitSave = async (userId: number) => {
+    setActionError("")
+    try {
+      const val = editLimitValue.trim()
+      if (val === "") {
+        await adminApi.updateUser(userId, { clear_secrets_limit: true })
+      } else {
+        const num = parseInt(val, 10)
+        if (isNaN(num) || num <= 0) {
+          setActionError("Limit must be a positive number or empty to clear")
+          return
+        }
+        await adminApi.updateUser(userId, { secrets_limit_override: num })
+      }
+      setEditLimitUserId(null)
+      await fetchUsers()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update limit")
+    }
+  }
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PER_PAGE)) : 1
 
   const SortIndicator = ({ field }: { field: SortField }) => {
@@ -87,6 +115,8 @@ export default function AdminUsers() {
       <ArrowDown size={14} className="inline ml-1" />
     )
   }
+
+  const tierOptions = tiers.map((t) => t.tier)
 
   return (
     <div>
@@ -116,8 +146,11 @@ export default function AdminUsers() {
             className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
           >
             <option value="">All Tiers</option>
-            <option value="free">Free</option>
-            <option value="pro">Pro</option>
+            {tierOptions.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -159,7 +192,7 @@ export default function AdminUsers() {
                     Tier
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Secrets Used
+                    Usage
                   </th>
                   <th
                     className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400 cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -197,7 +230,59 @@ export default function AdminUsers() {
                         {user.tier}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{user.secrets_used}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">
+                      {editLimitUserId === user.id ? (
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="tier default"
+                            value={editLimitValue}
+                            onChange={(e) => setEditLimitValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleLimitSave(user.id)
+                              if (e.key === "Escape") setEditLimitUserId(null)
+                            }}
+                            className="w-20 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-white"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditLimitUserId(null)}
+                            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                          >
+                            <X size={14} />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <span>
+                            {user.secrets_used}/{user.secrets_limit}
+                          </span>
+                          {user.secrets_limit_override !== null && (
+                            <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              custom
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditLimitUserId(user.id)
+                              setEditLimitValue(
+                                user.secrets_limit_override !== null
+                                  ? String(user.secrets_limit_override)
+                                  : "",
+                              )
+                              setActionError("")
+                            }}
+                            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Edit limit override"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
