@@ -218,7 +218,34 @@ curl -s -u admin:secret -X DELETE http://localhost:8080/api/v1/admin/subscriptio
 # Returns 204 No Content
 ```
 
+## Admin Panel
+
+The admin panel is a separate section of the frontend at `/admin`. It uses HTTP
+Basic Auth (independent from the main app's OAuth/JWT flow).
+
+1. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables for the backend
+2. Navigate to `http://localhost:3000/admin/login`
+3. Sign in with the admin credentials
+
+**Pages:**
+- `/admin/users` — Search, filter by tier, sort, change user tiers
+- `/admin/subscriptions` — Filter by status, sort, cancel subscriptions
+
+Credentials are stored in `sessionStorage` and cleared when the tab is closed.
+
 ## Development
+
+### Frontend
+
+```bash
+cd frontend
+npm install        # install dependencies
+npm run dev        # development server at http://localhost:3000
+npm run build      # production build
+npx eslint .       # lint
+```
+
+### Backend
 
 ```bash
 cd backend
@@ -263,7 +290,13 @@ secretdrop/
 │       ├── repository/         # Secret repository (SQLite)
 │       ├── service/            # Business logic (create/reveal + limits)
 │       └── user/               # User repository (SQLite, users + subscriptions)
-├── frontend/                   # React/TypeScript (TBD)
+├── frontend/                   # React/TypeScript SPA
+│   └── src/
+│       ├── api/                # API clients (app + admin)
+│       ├── components/         # Shared components (Layout, AdminLayout, ConfirmModal)
+│       ├── context/            # Auth + Theme context providers
+│       └── pages/              # Route pages
+│           └── admin/          # Admin panel pages (Login, Users, Subscriptions)
 ├── .pre-commit-config.yaml
 ├── .gitignore
 └── CLAUDE.md
