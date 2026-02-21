@@ -47,7 +47,7 @@ secretdrop/
 │       │   ├── console/       # Console logger (development)
 │       │   ├── noop/          # No-op notifier (testing)
 │       │   └── sloghandler/   # Custom slog.Handler for error notifications
-│       ├── middleware/        # RequestID, logging, auth, content-type
+│       ├── middleware/        # RequestID, logging, auth, content-type, CORS
 │       ├── model/             # Domain models, request/response types, errors
 │       ├── repository/        # Secret repository interface
 │       │   └── sqlite/        # SQLite implementation
@@ -56,7 +56,7 @@ secretdrop/
 │           └── sqlite/        # SQLite implementation (users + subscriptions)
 ├── frontend/                  # React/TypeScript SPA
 │   └── src/
-│       ├── api/               # API clients (app + admin)
+│       ├── api/               # API clients (app + admin) + shared config
 │       ├── components/        # Shared components (Layout, AdminLayout, ConfirmModal, ThemeToggle)
 │       ├── context/           # Auth + Theme context providers
 │       └── pages/             # Route pages
@@ -117,6 +117,7 @@ secretdrop/
 | `ADMIN_PASSWORD` | No | — |
 | `SENTRY_DSN` | No | — |
 | `SENTRY_TRACES_SAMPLE_RATE` | No | `1.0` |
+| `VITE_API_BASE_URL` | No (frontend) | `""` (same origin) |
 
 ## Frontend Routes
 
