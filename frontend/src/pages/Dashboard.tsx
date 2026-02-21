@@ -1,7 +1,8 @@
-import { use, useState, type FormEvent } from "react"
+import { use, useState, useRef, useEffect, type FormEvent } from "react"
 import { Plus, X, Loader2, Copy, Check, Rocket } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { api, AppError, type CreateSecretResponse } from "../api/client"
+import { useRecentEmails } from "../hooks/useRecentEmails"
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -27,6 +28,27 @@ export default function Dashboard() {
   const [result, setResult] = useState<CreateSecretResponse | null>(null)
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { addEmails, suggest } = useRecentEmails()
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const suggestions = showSuggestions ? suggest(emailInput, emails) : []
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false)
+      }
+    }
+    if (showSuggestions) document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [showSuggestions])
 
   if (!auth || !auth.user) return null
 
@@ -38,6 +60,18 @@ export default function Dashboard() {
     if (trimmed && !emails.includes(trimmed) && emails.length < maxRecipients) {
       setEmails([...emails, trimmed])
       setEmailInput("")
+      setShowSuggestions(false)
+      setSelectedIndex(-1)
+    }
+  }
+
+  const selectSuggestion = (email: string) => {
+    if (!emails.includes(email) && emails.length < maxRecipients) {
+      setEmails([...emails, email])
+      setEmailInput("")
+      setShowSuggestions(false)
+      setSelectedIndex(-1)
+      inputRef.current?.focus()
     }
   }
 
@@ -52,6 +86,7 @@ export default function Dashboard() {
 
     try {
       const response = await api.createSecret({ text, to: emails })
+      addEmails(emails)
       setResult(response)
       setText("")
       setEmails([])
@@ -175,14 +210,62 @@ export default function Dashboard() {
           <div className="mt-4">
             <label className="text-sm font-medium">Recipients</label>
             <div className="flex gap-2 mt-1">
-              <input
-                type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail() } }}
-                placeholder="email@example.com"
-                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
-              />
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value)
+                    setShowSuggestions(true)
+                    setSelectedIndex(-1)
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault()
+                      setSelectedIndex((i) => Math.min(i + 1, suggestions.length - 1))
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault()
+                      setSelectedIndex((i) => Math.max(i - 1, -1))
+                    } else if (e.key === "Enter") {
+                      e.preventDefault()
+                      if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                        selectSuggestion(suggestions[selectedIndex])
+                      } else {
+                        addEmail()
+                      }
+                    } else if (e.key === "Escape") {
+                      setShowSuggestions(false)
+                    }
+                  }}
+                  placeholder="email@example.com"
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                  autoComplete="off"
+                />
+                {suggestions.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 max-h-40 overflow-y-auto"
+                  >
+                    {suggestions.map((email, i) => (
+                      <button
+                        key={email}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectSuggestion(email)}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          i === selectedIndex
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+                        }`}
+                      >
+                        {email}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={addEmail}
