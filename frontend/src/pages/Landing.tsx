@@ -5,12 +5,17 @@ import { AuthContext } from "../context/AuthContext"
 
 const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
 
-const HEADLINES = [
-  "Share secrets that disappear after one read.",
-  "Stop pasting API keys in Slack.",
-  "One-time links. Zero-knowledge encryption.",
-  "Share .env variables without the risk.",
-  "Encrypted. Delivered. Destroyed.",
+interface Headline {
+  text: string
+  highlight: string
+}
+
+const HEADLINES: Headline[] = [
+  { text: "Share secrets that disappear after one read.", highlight: "secrets" },
+  { text: "Stop pasting API keys in Slack.", highlight: "API keys" },
+  { text: "One-time links. Zero-knowledge encryption.", highlight: "One-time" },
+  { text: "Share .env variables without the risk.", highlight: ".env" },
+  { text: "Encrypted. Delivered. Destroyed.", highlight: "Destroyed" },
 ]
 
 const TYPE_SPEED = 50
@@ -18,40 +23,52 @@ const DELETE_SPEED = 30
 const PAUSE_AFTER_TYPE = 2000
 const PAUSE_AFTER_DELETE = 400
 
-function useTypewriter(phrases: string[]) {
+function useTypewriter(headlines: Headline[]) {
   const [index, setIndex] = useState(0)
-  const [text, setText] = useState("")
+  const [charCount, setCharCount] = useState(0)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const tick = useCallback(() => {
-    const current = phrases[index]
+  const current = headlines[index]
 
+  const tick = useCallback(() => {
     if (!isDeleting) {
-      setText(current.slice(0, text.length + 1))
-      if (text.length + 1 === current.length) {
+      setCharCount((c) => c + 1)
+      if (charCount + 1 === current.text.length) {
         setTimeout(() => setIsDeleting(true), PAUSE_AFTER_TYPE)
         return
       }
     } else {
-      setText(current.slice(0, text.length - 1))
-      if (text.length - 1 === 0) {
+      setCharCount((c) => c - 1)
+      if (charCount - 1 === 0) {
         setIsDeleting(false)
-        setIndex((index + 1) % phrases.length)
+        setIndex((i) => (i + 1) % headlines.length)
         return
       }
     }
-  }, [phrases, index, text, isDeleting])
+  }, [headlines, current, charCount, isDeleting])
 
   useEffect(() => {
     let delay = isDeleting ? DELETE_SPEED : TYPE_SPEED
-    if (!isDeleting && text === phrases[index]) delay = PAUSE_AFTER_TYPE
-    if (isDeleting && text === "") delay = PAUSE_AFTER_DELETE
+    if (!isDeleting && charCount === current.text.length) delay = PAUSE_AFTER_TYPE
+    if (isDeleting && charCount === 0) delay = PAUSE_AFTER_DELETE
 
     const timer = setTimeout(tick, delay)
     return () => clearTimeout(timer)
-  }, [tick, isDeleting, text, phrases, index])
+  }, [tick, isDeleting, charCount, current])
 
-  return text
+  const typed = current.text.slice(0, charCount)
+  const hlStart = current.text.indexOf(current.highlight)
+  const hlEnd = hlStart + current.highlight.length
+
+  if (hlStart === -1 || charCount <= hlStart) {
+    return { before: typed, highlighted: "", after: "" }
+  }
+
+  return {
+    before: typed.slice(0, hlStart),
+    highlighted: typed.slice(hlStart, Math.min(charCount, hlEnd)),
+    after: charCount > hlEnd ? typed.slice(hlEnd) : "",
+  }
 }
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -75,7 +92,7 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export default function Landing() {
   const auth = use(AuthContext)
-  const headline = useTypewriter(HEADLINES)
+  const { before, highlighted, after } = useTypewriter(HEADLINES)
 
   const [signInOpen, setSignInOpen] = useState(false)
 
@@ -98,7 +115,11 @@ export default function Landing() {
       <section className="max-w-3xl mx-auto px-4 py-24 text-center">
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight h-[2.8em] sm:h-[1.4em] flex items-center justify-center">
           <span>
-            {headline}
+            {before}
+            {highlighted && (
+              <span className="text-indigo-500 dark:text-indigo-400">{highlighted}</span>
+            )}
+            {after}
             <span className="inline-block w-[3px] h-[1em] bg-gray-900 dark:bg-white ml-0.5 align-middle animate-blink" />
           </span>
         </h1>
