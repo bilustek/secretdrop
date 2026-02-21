@@ -13,6 +13,7 @@ import Contact from "./pages/Contact"
 import AdminLogin from "./pages/admin/Login"
 import AdminUsers from "./pages/admin/Users"
 import AdminSubscriptions from "./pages/admin/Subscriptions"
+import AdminLimits from "./pages/admin/Limits"
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route index element={<Navigate to="/admin/users" replace />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="subscriptions" element={<AdminSubscriptions />} />
+        <Route path="limits" element={<AdminLimits />} />
       </Route>
     </Routes>
   )

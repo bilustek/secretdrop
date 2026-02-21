@@ -9,6 +9,8 @@ export interface AdminUser {
   provider: string
   tier: string
   secrets_used: number
+  secrets_limit: number
+  secrets_limit_override: number | null
   created_at: string
 }
 
@@ -37,6 +39,12 @@ export interface AdminSubscriptionsResponse {
   total: number
   page: number
   per_page: number
+}
+
+export interface TierLimits {
+  tier: string
+  secrets_limit: number
+  recipients_limit: number
 }
 
 export interface UserListParams {
@@ -115,10 +123,10 @@ export const adminApi = {
   fetchUsers: (params: UserListParams = {}) =>
     adminRequest<AdminUsersResponse>(`/users${buildQuery(params as Record<string, string | number | undefined>)}`),
 
-  updateTier: (id: number, tier: string) =>
+  updateUser: (id: number, data: { tier?: string; secrets_limit_override?: number; clear_secrets_limit?: boolean }) =>
     adminRequest<{ status: string }>(`/users/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify(data),
     }),
 
   fetchSubscriptions: (params: SubscriptionListParams = {}) =>
@@ -126,4 +134,15 @@ export const adminApi = {
 
   cancelSubscription: (id: number) =>
     adminRequest<void>(`/subscriptions/${id}`, { method: "DELETE" }),
+
+  fetchLimits: () => adminRequest<TierLimits[]>("/limits"),
+
+  upsertLimits: (tier: string, data: { secrets_limit: number; recipients_limit: number }) =>
+    adminRequest<TierLimits>(`/limits/${tier}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteLimits: (tier: string) =>
+    adminRequest<void>(`/limits/${tier}`, { method: "DELETE" }),
 }

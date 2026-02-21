@@ -70,7 +70,7 @@ export default function AdminUsers() {
     setActionError("")
     try {
       const newTier = user.tier === "free" ? "pro" : "free"
-      await adminApi.updateTier(user.id, newTier)
+      await adminApi.updateUser(user.id, { tier: newTier })
       await fetchUsers()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update tier")

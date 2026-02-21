@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from "react-router"
-import { LogOut, Shield, Users, CreditCard } from "lucide-react"
+import { LogOut, Shield, Users, CreditCard, Gauge } from "lucide-react"
 import { ThemeToggle } from "./ThemeToggle"
 import { hasCredentials, clearCredentials } from "../api/admin"
 
@@ -18,6 +18,7 @@ export function AdminLayout() {
   const navLinks = [
     { to: "/admin/users", label: "Users", icon: Users },
     { to: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+    { to: "/admin/limits", label: "Limits", icon: Gauge },
   ]
 
   return (
