@@ -87,6 +87,13 @@ export SENTRY_TRACES_SAMPLE_RATE=1.0
 # VITE_API_BASE_URL=https://api.secretdrop.us  # empty = same origin
 ```
 
+## API Documentation
+
+https://api.secretdrop.us/docs
+
+Interactive API docs (Scalar UI) are available at [`/docs`](https://api.secretdrop.us/docs)
+(protected by Basic Auth when `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set).
+
 ## API Endpoints
 
 | Method | Path | Auth | Description |

@@ -812,13 +812,13 @@ components:
           maxLength: 65536
           description: The secret text to encrypt (free 4KB, pro 64KB)
         to:
+          description: "Recipient email addresses (free tier: max 1, pro tier: max 5)"
           type: array
           items:
             type: string
             format: email
           minItems: 1
           maxItems: 5
-          description: Recipient email addresses (free tier: max 1, pro tier: max 5)
 
     CreateResponse:
       type: object

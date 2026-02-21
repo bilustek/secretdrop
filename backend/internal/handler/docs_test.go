@@ -90,22 +90,13 @@ func TestRegisterDocs_WithProtect(t *testing.T) {
 		t.Errorf("authed /docs status = %d; want %d", rec.Code, http.StatusOK)
 	}
 
-	// Spec endpoint also protected
+	// Spec endpoint is always public (Scalar UI fetches it via JS without credentials)
 	req = httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
-	rec = httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("unauthed /docs/openapi.yaml status = %d; want %d", rec.Code, http.StatusForbidden)
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
-	req.Header.Set("X-Test-Auth", "ok")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("authed /docs/openapi.yaml status = %d; want %d", rec.Code, http.StatusOK)
+		t.Errorf("unauthed /docs/openapi.yaml status = %d; want %d (spec should be public)", rec.Code, http.StatusOK)
 	}
 }
 
