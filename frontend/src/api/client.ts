@@ -1,4 +1,6 @@
-const API_BASE = "/api/v1"
+import { API_URL } from "./config"
+
+const API_BASE = `${API_URL}/api/v1`
 
 interface ApiError {
   error: {
@@ -106,7 +108,7 @@ export const api = {
     }),
 
   checkout: () =>
-    fetch("/billing/checkout", {
+    fetch(`${API_URL}/billing/checkout`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -115,7 +117,7 @@ export const api = {
     }).then((r) => r.json() as Promise<CheckoutResponse>),
 
   portal: () =>
-    fetch("/billing/portal", {
+    fetch(`${API_URL}/billing/portal`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${localStorage.getItem("access_token")}`,

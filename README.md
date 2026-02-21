@@ -82,6 +82,9 @@ export ADMIN_PASSWORD=change-me-to-a-strong-password
 # Sentry (optional — error tracking and performance monitoring)
 export SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 export SENTRY_TRACES_SAMPLE_RATE=1.0
+
+# Frontend (build-time, passed as Docker build arg)
+# VITE_API_BASE_URL=https://api.secretdrop.us  # empty = same origin
 ```
 
 ## API Endpoints
@@ -296,7 +299,7 @@ secretdrop/
 │       ├── crypt/              # AES-256-GCM + HKDF encryption
 │       ├── email/              # Resend email delivery
 │       ├── handler/            # HTTP handlers + docs
-│       ├── middleware/         # Request ID, logging, auth, content-type
+│       ├── middleware/         # Request ID, logging, auth, content-type, CORS
 │       ├── model/              # Domain models, request/response, errors
 │       ├── repository/         # Secret repository (SQLite)
 │       ├── sentry/            # Sentry init + slog handler

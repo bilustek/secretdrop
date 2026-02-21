@@ -1,4 +1,6 @@
-const API_BASE = "/api/v1/admin"
+import { API_URL } from "./config"
+
+const API_BASE = `${API_URL}/api/v1/admin`
 
 const CREDENTIALS_KEY = "admin_credentials"
 
