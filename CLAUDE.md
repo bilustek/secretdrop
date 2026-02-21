@@ -57,7 +57,7 @@ secretdrop/
 │       ├── components/        # Shared components (Layout, AdminLayout, ConfirmModal, ThemeToggle)
 │       ├── context/           # Auth + Theme context providers
 │       └── pages/             # Route pages
-│           └── admin/         # Admin panel (Login, Users, Subscriptions)
+│           └── admin/         # Admin panel (Login, Users, Subscriptions, Limits)
 ├── .gitignore
 ├── .pre-commit-config.yaml
 └── CLAUDE.md
@@ -79,9 +79,12 @@ secretdrop/
 - `POST /billing/portal` — Stripe customer portal (auth required)
 - `POST /billing/webhook` — Stripe webhook handler
 - `GET /api/v1/admin/users` — List users with search/filter/sort/pagination (admin auth)
-- `PATCH /api/v1/admin/users/{id}` — Update user tier (admin auth)
+- `PATCH /api/v1/admin/users/{id}` — Update user tier or secrets limit override (admin auth)
 - `GET /api/v1/admin/subscriptions` — List subscriptions with filter/sort/pagination (admin auth)
 - `DELETE /api/v1/admin/subscriptions/{id}` — Cancel subscription (admin auth)
+- `GET /api/v1/admin/limits` — List all tier limits (admin auth)
+- `PUT /api/v1/admin/limits/{tier}` — Create or update tier limits (admin auth)
+- `DELETE /api/v1/admin/limits/{tier}` — Delete tier limits (admin auth)
 - `GET /healthz` — Health check (200)
 
 ## Environment Variables
@@ -116,8 +119,9 @@ secretdrop/
 - `/dashboard` — User dashboard (OAuth required)
 - `/s/:token` — Reveal secret
 - `/admin/login` — Admin login (Basic Auth, sessionStorage)
-- `/admin/users` — Admin: manage users (search, filter, sort, tier change)
-- `/admin/subscriptions` — Admin: manage subscriptions (filter, sort, cancel)
+- `/admin/users` — Admin: manage users (search, filter, sort, tier change, per-user limit override)
+- `/admin/subscriptions` — Admin: manage subscriptions (search, filter, sort, cancel)
+- `/admin/limits` — Admin: manage tier limits (CRUD for secrets/recipients limits per tier)
 
 ## Running
 

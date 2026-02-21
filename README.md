@@ -98,9 +98,12 @@ export ADMIN_PASSWORD=change-me-to-a-strong-password
 | `DELETE` | `/api/v1/me` | Bearer | Delete user account |
 | `POST` | `/api/v1/contact` | No | Send contact form message |
 | `GET`  | `/api/v1/admin/users` | Basic | List users (search/filter/sort/pagination) |
-| `PATCH` | `/api/v1/admin/users/{id}` | Basic | Update user tier |
-| `GET`  | `/api/v1/admin/subscriptions` | Basic | List subscriptions (filter/sort/pagination) |
+| `PATCH` | `/api/v1/admin/users/{id}` | Basic | Update user tier or secrets limit override |
+| `GET`  | `/api/v1/admin/subscriptions` | Basic | List subscriptions (search/filter/sort/pagination) |
 | `DELETE` | `/api/v1/admin/subscriptions/{id}` | Basic | Cancel subscription |
+| `GET`  | `/api/v1/admin/limits` | Basic | List tier limits |
+| `PUT`  | `/api/v1/admin/limits/{tier}` | Basic | Create or update tier limits |
+| `DELETE` | `/api/v1/admin/limits/{tier}` | Basic | Delete tier limits |
 | `GET`  | `/docs` | Basic* | API documentation (Scalar UI) |
 | `GET`  | `/docs/openapi.yaml` | Basic* | OpenAPI 3.1 spec |
 
@@ -188,6 +191,8 @@ curl -s -u admin:secret http://localhost:8080/api/v1/admin/users?tier=pro | jq .
       "provider": "google",
       "tier": "pro",
       "secrets_used": 23,
+      "secrets_limit": 100,
+      "secrets_limit_override": null,
       "created_at": "2026-02-20T10:00:00Z"
     }
   ],
@@ -228,8 +233,9 @@ Basic Auth (independent from the main app's OAuth/JWT flow).
 3. Sign in with the admin credentials
 
 **Pages:**
-- `/admin/users` — Search, filter by tier, sort, change user tiers
-- `/admin/subscriptions` — Filter by status, sort, cancel subscriptions
+- `/admin/users` — Search, filter by tier, sort, change user tiers, set per-user secrets limit override
+- `/admin/subscriptions` — Search, filter by status, sort, cancel subscriptions
+- `/admin/limits` — Configure secrets and recipients limits per tier (add/edit/delete tiers)
 
 Credentials are stored in `sessionStorage` and cleared when the tab is closed.
 
@@ -296,7 +302,7 @@ secretdrop/
 │       ├── components/         # Shared components (Layout, AdminLayout, ConfirmModal)
 │       ├── context/            # Auth + Theme context providers
 │       └── pages/              # Route pages
-│           └── admin/          # Admin panel pages (Login, Users, Subscriptions)
+│           └── admin/          # Admin panel pages (Login, Users, Subscriptions, Limits)
 ├── .pre-commit-config.yaml
 ├── .gitignore
 └── CLAUDE.md

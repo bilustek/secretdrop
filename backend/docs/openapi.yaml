@@ -218,6 +218,7 @@ paths:
                 tier: "pro"
                 secrets_used: 23
                 secrets_limit: 100
+                recipients_limit: 10
         "401":
           description: Authentication required
           content:
@@ -513,7 +514,7 @@ paths:
       parameters:
         - name: q
           in: query
-          description: Search by email (LIKE match)
+          description: Search by email or name (LIKE match)
           schema:
             type: string
         - name: tier
@@ -521,7 +522,6 @@ paths:
           description: Filter by tier
           schema:
             type: string
-            enum: [free, pro]
         - name: sort
           in: query
           description: Sort field
@@ -558,10 +558,11 @@ paths:
 
   /api/v1/admin/users/{id}:
     patch:
-      operationId: adminUpdateTier
-      summary: Update user tier (admin)
+      operationId: adminUpdateUser
+      summary: Update user (admin)
       description: |
-        Changes the tier for a specific user. Requires HTTP Basic Auth.
+        Updates a user's tier, sets a per-user secrets limit override, or clears
+        the override. At least one field must be provided. Requires HTTP Basic Auth.
       security:
         - basicAuth: []
       parameters:
@@ -576,14 +577,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdminUpdateTierRequest"
-            example:
-              tier: "pro"
+              $ref: "#/components/schemas/AdminUpdateUserRequest"
+            examples:
+              change_tier:
+                summary: Change user tier
+                value:
+                  tier: "pro"
+              set_override:
+                summary: Set per-user secrets limit override
+                value:
+                  secrets_limit_override: 500
+              clear_override:
+                summary: Clear per-user secrets limit override
+                value:
+                  clear_secrets_limit: true
       responses:
         "200":
-          description: Tier updated
+          description: User updated
         "400":
-          description: Invalid tier value
+          description: Invalid request (unknown tier, invalid override value, or no fields)
         "401":
           description: Admin authentication required
         "404":
@@ -601,7 +613,7 @@ paths:
       parameters:
         - name: q
           in: query
-          description: Search by user email
+          description: Search by user email or name
           schema:
             type: string
         - name: status
@@ -665,6 +677,96 @@ paths:
           description: Admin authentication required
         "404":
           description: Subscription not found
+
+  /api/v1/admin/limits:
+    get:
+      operationId: adminListLimits
+      summary: List tier limits (admin)
+      description: |
+        Returns all configured tier limits (secrets and recipients per tier).
+        Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      responses:
+        "200":
+          description: Array of tier limits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminLimitsResponse"
+              example:
+                - tier: "free"
+                  secrets_limit: 5
+                  recipients_limit: 1
+                - tier: "pro"
+                  secrets_limit: 100
+                  recipients_limit: 10
+        "401":
+          description: Admin authentication required
+
+  /api/v1/admin/limits/{tier}:
+    put:
+      operationId: adminUpsertLimits
+      summary: Create or update tier limits (admin)
+      description: |
+        Creates a new tier or updates an existing tier's limits.
+        Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: tier
+          in: path
+          required: true
+          description: Tier name (e.g. free, pro, vip)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpsertLimitsRequest"
+            example:
+              secrets_limit: 1000
+              recipients_limit: 20
+      responses:
+        "200":
+          description: Tier limits created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLimitsResponse"
+        "400":
+          description: Invalid limits (must be positive)
+        "401":
+          description: Admin authentication required
+
+    delete:
+      operationId: adminDeleteLimits
+      summary: Delete tier limits (admin)
+      description: |
+        Deletes a tier from the limits table. The free tier cannot be deleted.
+        Users on this tier will fall back to hardcoded defaults.
+        Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: tier
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Tier limits deleted
+        "400":
+          description: Cannot delete the free tier
+        "401":
+          description: Admin authentication required
+        "404":
+          description: Tier not found
 
   /healthz:
     get:
@@ -778,13 +880,14 @@ components:
           format: uri
         tier:
           type: string
-          enum:
-            - free
-            - pro
         secrets_used:
           type: integer
         secrets_limit:
           type: integer
+          description: Effective secrets limit (per-user override > tier limit > fallback)
+        recipients_limit:
+          type: integer
+          description: Maximum recipients per secret (from tier limits)
 
     TokenPair:
       type: object
@@ -869,9 +972,15 @@ components:
           enum: [google, github]
         tier:
           type: string
-          enum: [free, pro]
         secrets_used:
           type: integer
+        secrets_limit:
+          type: integer
+          description: Effective secrets limit (per-user override > tier limit > fallback)
+        secrets_limit_override:
+          type: integer
+          nullable: true
+          description: Per-user secrets limit override (null if using tier default)
         created_at:
           type: string
           format: date-time
@@ -922,15 +1031,47 @@ components:
           type: string
           format: date-time
 
-    AdminUpdateTierRequest:
+    AdminUpdateUserRequest:
       type: object
-      required:
-        - tier
+      description: |
+        At least one field must be provided. Fields can be combined
+        (e.g., change tier and set override in one request).
       properties:
         tier:
           type: string
-          enum: [free, pro]
-          description: New tier for the user
+          description: New tier for the user (must exist in limits table)
+        secrets_limit_override:
+          type: integer
+          minimum: 1
+          description: Per-user secrets limit override (positive integer)
+        clear_secrets_limit:
+          type: boolean
+          description: Set to true to remove the per-user secrets limit override
+
+    AdminLimitsResponse:
+      type: object
+      properties:
+        tier:
+          type: string
+        secrets_limit:
+          type: integer
+        recipients_limit:
+          type: integer
+
+    AdminUpsertLimitsRequest:
+      type: object
+      required:
+        - secrets_limit
+        - recipients_limit
+      properties:
+        secrets_limit:
+          type: integer
+          minimum: 1
+          description: Maximum number of secrets for this tier
+        recipients_limit:
+          type: integer
+          minimum: 1
+          description: Maximum recipients per secret for this tier
 
     ErrorResponse:
       type: object
