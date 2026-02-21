@@ -501,6 +501,171 @@ paths:
         "200":
           description: Webhook processed
 
+  /api/v1/admin/users:
+    get:
+      operationId: adminListUsers
+      summary: List users (admin)
+      description: |
+        Returns a paginated list of users with optional search, filter, and sort.
+        Requires HTTP Basic Auth (admin credentials).
+      security:
+        - basicAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search by email (LIKE match)
+          schema:
+            type: string
+        - name: tier
+          in: query
+          description: Filter by tier
+          schema:
+            type: string
+            enum: [free, pro]
+        - name: sort
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [created_at, email, name, tier, secrets_used]
+        - name: order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersListResponse"
+        "401":
+          description: Admin authentication required
+
+  /api/v1/admin/users/{id}:
+    patch:
+      operationId: adminUpdateTier
+      summary: Update user tier (admin)
+      description: |
+        Changes the tier for a specific user. Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateTierRequest"
+            example:
+              tier: "pro"
+      responses:
+        "200":
+          description: Tier updated
+        "400":
+          description: Invalid tier value
+        "401":
+          description: Admin authentication required
+        "404":
+          description: User not found
+
+  /api/v1/admin/subscriptions:
+    get:
+      operationId: adminListSubscriptions
+      summary: List subscriptions (admin)
+      description: |
+        Returns a paginated list of subscriptions with user info.
+        Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search by user email
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by subscription status
+          schema:
+            type: string
+            enum: [active, canceled, past_due]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at, status]
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated subscription list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionsListResponse"
+        "401":
+          description: Admin authentication required
+
+  /api/v1/admin/subscriptions/{id}:
+    delete:
+      operationId: adminCancelSubscription
+      summary: Cancel subscription (admin)
+      description: |
+        Cancels a subscription in Stripe and updates the database status.
+        The user is downgraded to free tier. Requires HTTP Basic Auth.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Subscription cancelled
+        "401":
+          description: Admin authentication required
+        "404":
+          description: Subscription not found
+
   /healthz:
     get:
       operationId: healthCheck
@@ -527,6 +692,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT access token obtained via OAuth login
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Admin credentials (ADMIN_USERNAME / ADMIN_PASSWORD env vars)
 
   schemas:
     CreateRequest:
@@ -668,6 +837,100 @@ components:
         message:
           type: string
           description: Contact message
+
+    AdminUsersListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUserResponse"
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        per_page:
+          type: integer
+
+    AdminUserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [google, github]
+        tier:
+          type: string
+          enum: [free, pro]
+        secrets_used:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    AdminSubscriptionsListResponse:
+      type: object
+      properties:
+        subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminSubscriptionResponse"
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        per_page:
+          type: integer
+
+    AdminSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        user_id:
+          type: integer
+          format: int64
+        user_email:
+          type: string
+          format: email
+        user_name:
+          type: string
+        stripe_customer_id:
+          type: string
+        stripe_subscription_id:
+          type: string
+        status:
+          type: string
+          enum: [active, canceled, past_due]
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    AdminUpdateTierRequest:
+      type: object
+      required:
+        - tier
+      properties:
+        tier:
+          type: string
+          enum: [free, pro]
+          description: New tier for the user
 
     ErrorResponse:
       type: object
