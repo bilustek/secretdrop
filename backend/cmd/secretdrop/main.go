@@ -200,6 +200,9 @@ func Run() error {
 
 	mux.HandleFunc("DELETE /api/v1/me", handler.NewDeleteAccountHandler(userRepo, canceller, subscriptionNotifier))
 
+	// Debug route for Sentry verification (admin-protected when admin is configured)
+	mux.HandleFunc("GET /debug/sentry", handler.NewDebugSentryHandler())
+
 	// Admin routes (conditional — only when ADMIN_USERNAME and ADMIN_PASSWORD are set)
 	if cfg.AdminUsername() != "" && cfg.AdminPassword() != "" {
 		adminAuth := middleware.BasicAuth(cfg.AdminUsername(), cfg.AdminPassword())
