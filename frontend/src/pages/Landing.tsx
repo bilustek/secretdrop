@@ -2,6 +2,7 @@ import { use, useCallback, useEffect, useState } from "react"
 import { Navigate } from "react-router"
 import { Shield, Mail, Flame, KeyRound, Hash, Eye, Database } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
+import { API_URL } from "../api/config"
 
 const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
 
@@ -126,7 +127,7 @@ export default function Landing() {
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           {showGoogle && (
             <a
-              href="/auth/google"
+              href={`${API_URL}/auth/google`}
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
             >
               <GoogleIcon className="w-5 h-5" />
@@ -134,7 +135,7 @@ export default function Landing() {
             </a>
           )}
           <a
-            href="/auth/github"
+            href={`${API_URL}/auth/github`}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
           >
             <GitHubIcon className="w-5 h-5" />
@@ -314,14 +315,14 @@ export default function Landing() {
             <h2 className="text-lg font-semibold text-center">Sign in to continue</h2>
             <div className="mt-6 flex flex-col gap-3">
               <a
-                href="/auth/google"
+                href={`${API_URL}/auth/google`}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
               >
                 <GoogleIcon className="w-5 h-5" />
                 Sign in with Google
               </a>
               <a
-                href="/auth/github"
+                href={`${API_URL}/auth/github`}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
               >
                 <GitHubIcon className="w-5 h-5" />

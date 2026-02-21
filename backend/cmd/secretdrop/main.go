@@ -224,6 +224,8 @@ func Run() error {
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
 
+	chain = middleware.CORS(cfg.FrontendBaseURL())(chain)
+
 	if cfg.SentryDSN() != "" {
 		sentryHandler := sentryhttp.New(sentryhttp.Options{
 			Repanic: true,
