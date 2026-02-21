@@ -53,7 +53,11 @@ func TestNotifyRecordsCalls(t *testing.T) {
 	}
 
 	if notifier.Calls[0].Event.Fields["email"] != "alice@example.com" {
-		t.Errorf("Calls[0].Event.Fields[email] = %q; want %q", notifier.Calls[0].Event.Fields["email"], "alice@example.com")
+		t.Errorf(
+			"Calls[0].Event.Fields[email] = %q; want %q",
+			notifier.Calls[0].Event.Fields["email"],
+			"alice@example.com",
+		)
 	}
 
 	if notifier.Calls[1].Event.Type != slack.EventUserDeleted {

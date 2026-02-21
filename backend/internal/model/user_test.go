@@ -55,25 +55,25 @@ func TestUserSecretsLimit_WithOverride(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name              string
-		tier              string
-		tierSecretsLimit  int
-		secretsLimitOvrd  *int
-		want              int
+		name             string
+		tier             string
+		tierSecretsLimit int
+		secretsLimitOvrd *int
+		want             int
 	}{
 		{
-			name:              "override on free tier with no tier limit",
-			tier:              model.TierFree,
-			tierSecretsLimit:  0,
-			secretsLimitOvrd:  intPtr(500),
-			want:              500,
+			name:             "override on free tier with no tier limit",
+			tier:             model.TierFree,
+			tierSecretsLimit: 0,
+			secretsLimitOvrd: intPtr(500),
+			want:             500,
 		},
 		{
-			name:              "override on pro tier with tier limit loaded",
-			tier:              model.TierPro,
-			tierSecretsLimit:  100,
-			secretsLimitOvrd:  intPtr(1000),
-			want:              1000,
+			name:             "override on pro tier with tier limit loaded",
+			tier:             model.TierPro,
+			tierSecretsLimit: 100,
+			secretsLimitOvrd: intPtr(1000),
+			want:             1000,
 		},
 	}
 
