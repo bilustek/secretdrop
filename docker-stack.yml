@@ -41,6 +41,10 @@ services:
       - "traefik.http.routers.secretdrop-backend.entrypoints=websecure"
       - "traefik.http.routers.secretdrop-backend.tls=true"
       - "traefik.http.routers.secretdrop-backend.tls.certresolver=infracert"
+      - "traefik.http.middlewares.secretdrop-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.secretdrop-ratelimit.ratelimit.burst=50"
+      - "traefik.http.middlewares.secretdrop-ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.secretdrop-backend.middlewares=secretdrop-ratelimit"
       - "traefik.http.services.secretdrop-backend.loadbalancer.server.port=8080"
 
   secretdrop_frontend:
