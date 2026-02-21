@@ -201,7 +201,7 @@ export default function Dashboard() {
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter your secret message..."
             maxLength={4096}
-            rows={5}
+            rows={10}
             required
             className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white resize-none"
           />
