@@ -6,7 +6,7 @@ and auto-deleted after one-time reveal or expiry.
 
 ## Technologies Used
 
-- React and TypeScript for web frontend
+- React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4 for web frontend
 - Go for backend API server (go1.26.0)
 - golangci-lint v2 for Go linting
 - SQLite via modernc.org/sqlite (pure Go, no CGO)
@@ -51,7 +51,13 @@ secretdrop/
 │       ├── service/           # Business logic: create + reveal + limits
 │       └── user/              # User repository interface
 │           └── sqlite/        # SQLite implementation (users + subscriptions)
-├── frontend/                  # React/TypeScript (TBD)
+├── frontend/                  # React/TypeScript SPA
+│   └── src/
+│       ├── api/               # API clients (app + admin)
+│       ├── components/        # Shared components (Layout, AdminLayout, ConfirmModal, ThemeToggle)
+│       ├── context/           # Auth + Theme context providers
+│       └── pages/             # Route pages
+│           └── admin/         # Admin panel (Login, Users, Subscriptions, Limits)
 ├── .gitignore
 ├── .pre-commit-config.yaml
 └── CLAUDE.md
@@ -73,9 +79,12 @@ secretdrop/
 - `POST /billing/portal` — Stripe customer portal (auth required)
 - `POST /billing/webhook` — Stripe webhook handler
 - `GET /api/v1/admin/users` — List users with search/filter/sort/pagination (admin auth)
-- `PATCH /api/v1/admin/users/{id}` — Update user tier (admin auth)
+- `PATCH /api/v1/admin/users/{id}` — Update user tier or secrets limit override (admin auth)
 - `GET /api/v1/admin/subscriptions` — List subscriptions with filter/sort/pagination (admin auth)
 - `DELETE /api/v1/admin/subscriptions/{id}` — Cancel subscription (admin auth)
+- `GET /api/v1/admin/limits` — List all tier limits (admin auth)
+- `PUT /api/v1/admin/limits/{tier}` — Create or update tier limits (admin auth)
+- `DELETE /api/v1/admin/limits/{tier}` — Delete tier limits (admin auth)
 - `GET /healthz` — Health check (200)
 
 ## Environment Variables
@@ -104,32 +113,45 @@ secretdrop/
 | `ADMIN_USERNAME` | No | — |
 | `ADMIN_PASSWORD` | No | — |
 
-## Running the Backend
+## Frontend Routes
+
+- `/` — Landing page
+- `/dashboard` — User dashboard (OAuth required)
+- `/s/:token` — Reveal secret
+- `/admin/login` — Admin login (Basic Auth, sessionStorage)
+- `/admin/users` — Admin: manage users (search, filter, sort, tier change, per-user limit override)
+- `/admin/subscriptions` — Admin: manage subscriptions (search, filter, sort, cancel)
+- `/admin/limits` — Admin: manage tier limits (CRUD for secrets/recipients limits per tier)
+
+## Running
 
 ```bash
-# Production
+# Backend (production)
 cd backend
 RESEND_API_KEY=re_xxx go run ./cmd/secretdrop/    # starts server on :8080
 
-# Development (no API key needed, emails logged to console)
+# Backend (development — emails logged to console)
 cd backend
 GOLANG_ENV=development go run ./cmd/secretdrop/
+
+# Frontend
+cd frontend
+npm install
+npm run dev       # development server at http://localhost:3000
 ```
 
 ## Development Commands
 
 ```bash
-# Build
-cd backend && go build ./...
+# Backend
+cd backend && go build ./...              # build
+cd backend && golangci-lint run ./...     # lint
+cd backend && golangci-lint fmt ./...     # format
+cd backend && go test -race ./...        # test
 
-# Lint
-cd backend && golangci-lint run ./...
-
-# Format
-cd backend && golangci-lint fmt ./...
-
-# Test
-cd backend && go test -race ./...
+# Frontend
+cd frontend && npm run build             # production build
+cd frontend && npx eslint .             # lint
 ```
 
 ## Development Process

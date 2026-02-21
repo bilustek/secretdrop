@@ -13,6 +13,7 @@ import (
 	"github.com/stripe/stripe-go/v82/webhook"
 
 	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/user"
 )
 
 // webhookUserRepo is a test double that tracks all calls for webhook tests.
@@ -124,6 +125,10 @@ func (m *webhookUserRepo) UpdateSubscriptionPeriod(_ context.Context, subID stri
 
 func (m *webhookUserRepo) DeleteUser(_ context.Context, _ int64) error {
 	return errors.New("not implemented")
+}
+
+func (m *webhookUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits, error) {
+	return nil, model.ErrNotFound
 }
 
 const (

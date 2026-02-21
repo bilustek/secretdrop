@@ -3,6 +3,8 @@ import { Navigate } from "react-router"
 import { Shield, Mail, Flame } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 
+const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
+
 function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -53,13 +55,15 @@ export default function Landing() {
           End-to-end encrypted. Zero-knowledge. One-time links.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="/auth/google"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
-          >
-            <GoogleIcon className="w-5 h-5" />
-            Sign in with Google
-          </a>
+          {showGoogle && (
+            <a
+              href="/auth/google"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
+            >
+              <GoogleIcon className="w-5 h-5" />
+              Sign in with Google
+            </a>
+          )}
           <a
             href="/auth/github"
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"

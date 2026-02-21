@@ -19,6 +19,7 @@ const (
 	errKeyError      = "error"
 	errTypeInternal  = "internal_error"
 	errTypeValidaton = "validation_error"
+	errTypeNotFound  = "not_found"
 )
 
 // AdminHandler handles admin API requests.
@@ -36,9 +37,12 @@ func NewAdminHandler(repo user.AdminRepository, canceller SubscriptionCanceller)
 // The caller is responsible for wrapping with BasicAuth middleware.
 func (h *AdminHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/users", h.ListUsers)
-	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateTier)
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
 	mux.HandleFunc("GET /api/v1/admin/subscriptions", h.ListSubscriptions)
 	mux.HandleFunc("DELETE /api/v1/admin/subscriptions/{id}", h.CancelSubscription)
+	mux.HandleFunc("GET /api/v1/admin/limits", h.ListLimits)
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+	mux.HandleFunc("DELETE /api/v1/admin/limits/{tier}", h.DeleteLimits)
 }
 
 // ListUsers handles GET /api/v1/admin/users.
@@ -53,13 +57,15 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := h.repo.CountUsers(r.Context(), opts...)
-	if err != nil {
-		slog.Error("admin count users", errKeyError, err)
+	count, countErr := h.repo.CountUsers(r.Context(), opts...)
+	if countErr != nil {
+		slog.Error("admin count users", errKeyError, countErr)
 		writeError(w, errTypeInternal, "Failed to count users", http.StatusInternalServerError)
 
 		return
 	}
+
+	limitsMap := h.buildLimitsMap(r)
 
 	q := user.ApplyOptions(opts...)
 	resp := model.AdminUsersListResponse{
@@ -70,54 +76,117 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, u := range users {
+		effectiveLimit := computeEffectiveLimit(u, limitsMap)
+
 		resp.Users = append(resp.Users, model.AdminUserResponse{
-			ID:          u.ID,
-			Email:       u.Email,
-			Name:        u.Name,
-			Provider:    u.Provider,
-			Tier:        u.Tier,
-			SecretsUsed: u.SecretsUsed,
-			CreatedAt:   u.CreatedAt.Format(timeFormat),
+			ID:                   u.ID,
+			Email:                u.Email,
+			Name:                 u.Name,
+			Provider:             u.Provider,
+			Tier:                 u.Tier,
+			SecretsUsed:          u.SecretsUsed,
+			SecretsLimit:         effectiveLimit,
+			SecretsLimitOverride: u.SecretsLimitOverride,
+			CreatedAt:            u.CreatedAt.Format(timeFormat),
 		})
 	}
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// UpdateTier handles PATCH /api/v1/admin/users/{id}.
-func (h *AdminHandler) UpdateTier(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+// UpdateUser handles PATCH /api/v1/admin/users/{id}.
+// Supports updating tier, setting a per-user secrets limit override,
+// or clearing the override.
+func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, parseErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if parseErr != nil {
 		writeError(w, errTypeValidaton, "Invalid user ID", http.StatusBadRequest)
 
 		return
 	}
 
-	var req model.AdminUpdateTierRequest
-	if err := readJSON(r, &req); err != nil {
+	var req model.AdminUpdateUserRequest
+	if jsonErr := readJSON(r, &req); jsonErr != nil {
 		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
 
 		return
 	}
 
-	if req.Tier != model.TierFree && req.Tier != model.TierPro {
-		writeError(w, errTypeValidaton, "Tier must be 'free' or 'pro'", http.StatusBadRequest)
+	if req.Tier == nil && req.SecretsLimitOverride == nil && !req.ClearSecretsLimit {
+		writeError(w, errTypeValidaton, "No update fields provided", http.StatusBadRequest)
 
 		return
 	}
 
-	if err := h.repo.UpdateTier(r.Context(), id, req.Tier); err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			writeError(w, "not_found", "User not found", http.StatusNotFound)
-		} else {
-			slog.Error("admin update tier", errKeyError, err)
-			writeError(w, errTypeInternal, "Failed to update tier", http.StatusInternalServerError)
+	if req.Tier != nil {
+		exists, tierErr := h.repo.TierExists(r.Context(), *req.Tier)
+		if tierErr != nil {
+			slog.Error("admin check tier exists", errKeyError, tierErr)
+			writeError(w, errTypeInternal, "Failed to validate tier", http.StatusInternalServerError)
+
+			return
 		}
 
-		return
+		if !exists {
+			writeError(w, errTypeValidaton, "Unknown tier", http.StatusBadRequest)
+
+			return
+		}
+
+		if updateErr := h.repo.UpdateTier(r.Context(), id, *req.Tier); updateErr != nil {
+			if errors.Is(updateErr, model.ErrNotFound) {
+				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+			} else {
+				slog.Error("admin update tier", errKeyError, updateErr)
+				writeError(w, errTypeInternal, "Failed to update tier", http.StatusInternalServerError)
+			}
+
+			return
+		}
+	}
+
+	if req.ClearSecretsLimit {
+		if clearErr := h.repo.UpdateSecretsLimitOverride(r.Context(), id, nil); clearErr != nil {
+			if errors.Is(clearErr, model.ErrNotFound) {
+				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+			} else {
+				slog.Error("admin clear secrets limit", errKeyError, clearErr)
+				writeError(w, errTypeInternal, "Failed to clear secrets limit", http.StatusInternalServerError)
+			}
+
+			return
+		}
+	} else if req.SecretsLimitOverride != nil {
+		if *req.SecretsLimitOverride <= 0 {
+			writeError(w, errTypeValidaton, "secrets_limit_override must be positive", http.StatusBadRequest)
+
+			return
+		}
+
+		if overrideErr := h.repo.UpdateSecretsLimitOverride(
+			r.Context(), id, req.SecretsLimitOverride,
+		); overrideErr != nil {
+			if errors.Is(overrideErr, model.ErrNotFound) {
+				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+			} else {
+				slog.Error("admin update secrets limit override", errKeyError, overrideErr)
+				writeError(
+					w, errTypeInternal, "Failed to update secrets limit",
+					http.StatusInternalServerError,
+				)
+			}
+
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// UpdateTier is kept as an alias for backward compatibility in tests.
+// Deprecated: use UpdateUser instead.
+func (h *AdminHandler) UpdateTier(w http.ResponseWriter, r *http.Request) {
+	h.UpdateUser(w, r)
 }
 
 // ListSubscriptions handles GET /api/v1/admin/subscriptions.
@@ -180,7 +249,7 @@ func (h *AdminHandler) CancelSubscription(w http.ResponseWriter, r *http.Request
 	sub, err := h.repo.FindSubscriptionByUserID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
-			writeError(w, "not_found", "Subscription not found", http.StatusNotFound)
+			writeError(w, errTypeNotFound, "Subscription not found", http.StatusNotFound)
 		} else {
 			slog.Error("admin find subscription", errKeyError, err)
 			writeError(w, errTypeInternal, "Failed to find subscription", http.StatusInternalServerError)
@@ -211,6 +280,135 @@ func (h *AdminHandler) CancelSubscription(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListLimits handles GET /api/v1/admin/limits.
+func (h *AdminHandler) ListLimits(w http.ResponseWriter, r *http.Request) {
+	limits, err := h.repo.ListLimits(r.Context())
+	if err != nil {
+		slog.Error("admin list limits", errKeyError, err)
+		writeError(w, errTypeInternal, "Failed to list limits", http.StatusInternalServerError)
+
+		return
+	}
+
+	resp := make([]model.AdminLimitsResponse, 0, len(limits))
+
+	for _, tl := range limits {
+		resp = append(resp, model.AdminLimitsResponse{
+			Tier:            tl.Tier,
+			SecretsLimit:    tl.SecretsLimit,
+			RecipientsLimit: tl.RecipientsLimit,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// UpsertLimits handles PUT /api/v1/admin/limits/{tier}.
+func (h *AdminHandler) UpsertLimits(w http.ResponseWriter, r *http.Request) {
+	tier := r.PathValue("tier")
+
+	var req model.AdminUpsertLimitsRequest
+	if jsonErr := readJSON(r, &req); jsonErr != nil {
+		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.SecretsLimit <= 0 {
+		writeError(w, errTypeValidaton, "secrets_limit must be positive", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.RecipientsLimit <= 0 {
+		writeError(w, errTypeValidaton, "recipients_limit must be positive", http.StatusBadRequest)
+
+		return
+	}
+
+	tl := &user.TierLimits{
+		Tier:            tier,
+		SecretsLimit:    req.SecretsLimit,
+		RecipientsLimit: req.RecipientsLimit,
+	}
+
+	if upsertErr := h.repo.UpsertLimits(r.Context(), tl); upsertErr != nil {
+		slog.Error("admin upsert limits", errKeyError, upsertErr)
+		writeError(w, errTypeInternal, "Failed to upsert limits", http.StatusInternalServerError)
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, model.AdminLimitsResponse{
+		Tier:            tl.Tier,
+		SecretsLimit:    tl.SecretsLimit,
+		RecipientsLimit: tl.RecipientsLimit,
+	})
+}
+
+// DeleteLimits handles DELETE /api/v1/admin/limits/{tier}.
+func (h *AdminHandler) DeleteLimits(w http.ResponseWriter, r *http.Request) {
+	tier := r.PathValue("tier")
+
+	if tier == model.TierFree {
+		writeError(
+			w, errTypeValidaton,
+			"Cannot delete the free tier; it is the default",
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	if deleteErr := h.repo.DeleteLimits(r.Context(), tier); deleteErr != nil {
+		if errors.Is(deleteErr, model.ErrNotFound) {
+			writeError(w, errTypeNotFound, "Tier not found", http.StatusNotFound)
+		} else {
+			slog.Error("admin delete limits", errKeyError, deleteErr)
+			writeError(w, errTypeInternal, "Failed to delete limits", http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// buildLimitsMap loads all tier limits and returns a map keyed by tier name.
+func (h *AdminHandler) buildLimitsMap(r *http.Request) map[string]*user.TierLimits {
+	limits, err := h.repo.ListLimits(r.Context())
+	if err != nil {
+		slog.Error("admin load limits for user list", errKeyError, err)
+
+		return nil
+	}
+
+	m := make(map[string]*user.TierLimits, len(limits))
+	for _, tl := range limits {
+		m[tl.Tier] = tl
+	}
+
+	return m
+}
+
+// computeEffectiveLimit returns the effective secrets limit for a user.
+// Priority: per-user override > tier limit from limits table > hardcoded fallback.
+func computeEffectiveLimit(u *model.User, limitsMap map[string]*user.TierLimits) int {
+	if u.SecretsLimitOverride != nil {
+		return *u.SecretsLimitOverride
+	}
+
+	if tl, ok := limitsMap[u.Tier]; ok {
+		return tl.SecretsLimit
+	}
+
+	if u.Tier == model.TierPro {
+		return model.ProTierLimit
+	}
+
+	return model.FreeTierLimit
 }
 
 func parseUserListOptions(r *http.Request) []user.ListOption {

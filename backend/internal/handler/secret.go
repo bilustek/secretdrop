@@ -72,13 +72,19 @@ func (h *SecretHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if tl, tlErr := h.userRepo.GetLimits(r.Context(), u.Tier); tlErr == nil {
+		u.TierSecretsLimit = tl.SecretsLimit
+		u.TierRecipientsLimit = tl.RecipientsLimit
+	}
+
 	writeJSON(w, http.StatusOK, model.MeResponse{
-		Email:        u.Email,
-		Name:         u.Name,
-		AvatarURL:    u.AvatarURL,
-		Tier:         u.Tier,
-		SecretsUsed:  u.SecretsUsed,
-		SecretsLimit: u.SecretsLimit(),
+		Email:           u.Email,
+		Name:            u.Name,
+		AvatarURL:       u.AvatarURL,
+		Tier:            u.Tier,
+		SecretsUsed:     u.SecretsUsed,
+		SecretsLimit:    u.SecretsLimit(),
+		RecipientsLimit: u.RecipientsLimit(),
 	})
 }
 

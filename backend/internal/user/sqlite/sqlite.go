@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id);
+CREATE TABLE IF NOT EXISTS limits (
+    tier             TEXT PRIMARY KEY,
+    secrets_limit    INTEGER NOT NULL DEFAULT 5,
+    recipients_limit INTEGER NOT NULL DEFAULT 1
+);
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('free', 5, 1);
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('pro', 100, 5);
 `
 
 const (
@@ -75,6 +82,9 @@ func New(dsn string) (*Repository, error) {
 		return nil, fmt.Errorf("run migration: %w", err)
 	}
 
+	// Add secrets_limit column if it doesn't exist (SQLite has no ADD COLUMN IF NOT EXISTS).
+	_, _ = db.Exec("ALTER TABLE users ADD COLUMN secrets_limit INTEGER")
+
 	return &Repository{db: db}, nil
 }
 
@@ -91,7 +101,8 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 			name       = excluded.name,
 			avatar_url = excluded.avatar_url,
 			updated_at = CURRENT_TIMESTAMP
-		RETURNING id, provider, provider_id, email, name, avatar_url, tier, secrets_used, created_at, updated_at
+		RETURNING id, provider, provider_id, email, name, avatar_url,
+			tier, secrets_used, created_at, updated_at, secrets_limit
 	`
 
 	result := &model.User{}
@@ -113,6 +124,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 		&result.SecretsUsed,
 		&result.CreatedAt,
 		&result.UpdatedAt,
+		&result.SecretsLimitOverride,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user: %w", err)
@@ -124,7 +136,8 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 // FindByID retrieves a user by ID. Returns model.ErrNotFound if no user exists.
 func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error) {
 	const query = `
-		SELECT id, provider, provider_id, email, name, avatar_url, tier, secrets_used, created_at, updated_at
+		SELECT id, provider, provider_id, email, name, avatar_url,
+			tier, secrets_used, created_at, updated_at, secrets_limit
 		FROM users
 		WHERE id = ?
 	`
@@ -142,6 +155,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 		&u.SecretsUsed,
 		&u.CreatedAt,
 		&u.UpdatedAt,
+		&u.SecretsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -158,7 +172,8 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 // Returns model.ErrNotFound if no user exists.
 func (r *Repository) FindByProvider(ctx context.Context, provider, providerID string) (*model.User, error) {
 	const query = `
-		SELECT id, provider, provider_id, email, name, avatar_url, tier, secrets_used, created_at, updated_at
+		SELECT id, provider, provider_id, email, name, avatar_url,
+			tier, secrets_used, created_at, updated_at, secrets_limit
 		FROM users
 		WHERE provider = ? AND provider_id = ?
 	`
@@ -176,6 +191,7 @@ func (r *Repository) FindByProvider(ctx context.Context, provider, providerID st
 		&u.SecretsUsed,
 		&u.CreatedAt,
 		&u.UpdatedAt,
+		&u.SecretsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -356,7 +372,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		SELECT u.id, u.provider, u.provider_id,
 			u.email, u.name, u.avatar_url,
 			u.tier, u.secrets_used,
-			u.created_at, u.updated_at
+			u.created_at, u.updated_at, u.secrets_limit
 		FROM users u
 		JOIN subscriptions s ON u.id = s.user_id
 		WHERE s.stripe_customer_id = ?
@@ -375,6 +391,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		&u.SecretsUsed,
 		&u.CreatedAt,
 		&u.UpdatedAt,
+		&u.SecretsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -454,13 +471,13 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 	q := user.ApplyOptions(opts...)
 
 	query := "SELECT id, provider, provider_id, email, name, avatar_url," +
-		" tier, secrets_used, created_at, updated_at FROM users"
+		" tier, secrets_used, created_at, updated_at, secrets_limit FROM users"
 	var args []any
 	var clauses []string
 
 	if q.Search != "" {
-		clauses = append(clauses, "email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(email LIKE ? OR name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if q.Tier != "" {
@@ -503,7 +520,7 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 		if err := rows.Scan(
 			&u.ID, &u.Provider, &u.ProviderID, &u.Email,
 			&u.Name, &u.AvatarURL, &u.Tier, &u.SecretsUsed,
-			&u.CreatedAt, &u.UpdatedAt,
+			&u.CreatedAt, &u.UpdatedAt, &u.SecretsLimitOverride,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
@@ -527,8 +544,8 @@ func (r *Repository) CountUsers(ctx context.Context, opts ...user.ListOption) (i
 	var clauses []string
 
 	if q.Search != "" {
-		clauses = append(clauses, "email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(email LIKE ? OR name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if q.Tier != "" {
@@ -570,8 +587,8 @@ func (r *Repository) ListSubscriptions(
 	}
 
 	if q.Search != "" {
-		clauses = append(clauses, "u.email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(u.email LIKE ? OR u.name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if len(clauses) > 0 {
@@ -639,8 +656,8 @@ func (r *Repository) CountSubscriptions(ctx context.Context, opts ...user.ListOp
 	}
 
 	if q.Search != "" {
-		clauses = append(clauses, "u.email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(u.email LIKE ? OR u.name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if len(clauses) > 0 {
@@ -653,6 +670,126 @@ func (r *Repository) CountSubscriptions(ctx context.Context, opts ...user.ListOp
 	}
 
 	return count, nil
+}
+
+// GetLimits returns the tier limits for the given tier.
+// Returns model.ErrNotFound if the tier does not exist.
+func (r *Repository) GetLimits(ctx context.Context, tier string) (*user.TierLimits, error) {
+	const query = `SELECT tier, secrets_limit, recipients_limit FROM limits WHERE tier = ?`
+
+	tl := &user.TierLimits{}
+
+	err := r.db.QueryRowContext(ctx, query, tier).Scan(&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("get limits: %w", err)
+	}
+
+	return tl, nil
+}
+
+// ListLimits returns all tier limit configurations ordered by tier name.
+func (r *Repository) ListLimits(ctx context.Context) ([]*user.TierLimits, error) {
+	const query = `SELECT tier, secrets_limit, recipients_limit FROM limits ORDER BY tier`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list limits: %w", err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	var limits []*user.TierLimits
+
+	for rows.Next() {
+		tl := &user.TierLimits{}
+		if err := rows.Scan(&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit); err != nil {
+			return nil, fmt.Errorf("scan limits: %w", err)
+		}
+
+		limits = append(limits, tl)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate limits: %w", err)
+	}
+
+	return limits, nil
+}
+
+// UpsertLimits creates or updates the limits for a tier.
+func (r *Repository) UpsertLimits(ctx context.Context, tl *user.TierLimits) error {
+	const query = `
+		INSERT INTO limits (tier, secrets_limit, recipients_limit) VALUES (?, ?, ?)
+		ON CONFLICT(tier) DO UPDATE SET
+			secrets_limit    = excluded.secrets_limit,
+			recipients_limit = excluded.recipients_limit
+	`
+
+	if _, err := r.db.ExecContext(ctx, query, tl.Tier, tl.SecretsLimit, tl.RecipientsLimit); err != nil {
+		return fmt.Errorf("upsert limits: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteLimits deletes the limits for a tier.
+// Returns model.ErrNotFound if the tier does not exist.
+func (r *Repository) DeleteLimits(ctx context.Context, tier string) error {
+	const query = `DELETE FROM limits WHERE tier = ?`
+
+	result, err := r.db.ExecContext(ctx, query, tier)
+	if err != nil {
+		return fmt.Errorf("delete limits: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpdateSecretsLimitOverride sets or clears the per-user secrets limit override.
+// Pass nil to clear the override.
+func (r *Repository) UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error {
+	const query = `UPDATE users SET secrets_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, limit, id)
+	if err != nil {
+		return fmt.Errorf("update secrets limit override: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// TierExists checks if a tier exists in the limits table.
+func (r *Repository) TierExists(ctx context.Context, tier string) (bool, error) {
+	var count int
+
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM limits WHERE tier = ?", tier).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("tier exists: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // Close closes the database connection.

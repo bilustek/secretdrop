@@ -1,6 +1,7 @@
-import { Routes, Route } from "react-router"
+import { Routes, Route, Navigate } from "react-router"
 import { Layout } from "./components/Layout"
 import { ProtectedRoute } from "./components/ProtectedRoute"
+import { AdminLayout } from "./components/AdminLayout"
 import Landing from "./pages/Landing"
 import Dashboard from "./pages/Dashboard"
 import Reveal from "./pages/Reveal"
@@ -9,6 +10,10 @@ import BillingSuccess from "./pages/BillingSuccess"
 import Terms from "./pages/Terms"
 import Privacy from "./pages/Privacy"
 import Contact from "./pages/Contact"
+import AdminLogin from "./pages/admin/Login"
+import AdminUsers from "./pages/admin/Users"
+import AdminSubscriptions from "./pages/admin/Subscriptions"
+import AdminLimits from "./pages/admin/Limits"
 
 export default function App() {
   return (
@@ -25,6 +30,13 @@ export default function App() {
         </Route>
       </Route>
       <Route path="auth/callback" element={<AuthCallback />} />
+      <Route path="admin/login" element={<AdminLogin />} />
+      <Route path="admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="/admin/users" replace />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="subscriptions" element={<AdminSubscriptions />} />
+        <Route path="limits" element={<AdminLimits />} />
+      </Route>
     </Routes>
   )
 }

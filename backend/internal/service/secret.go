@@ -117,6 +117,11 @@ func (s *SecretService) Create(
 			}
 		}
 
+		if tl, tlErr := s.userRepo.GetLimits(ctx, u.Tier); tlErr == nil {
+			u.TierSecretsLimit = tl.SecretsLimit
+			u.TierRecipientsLimit = tl.RecipientsLimit
+		}
+
 		if !u.CanCreateSecret() {
 			return nil, &model.AppError{
 				Type:       "limit_reached",

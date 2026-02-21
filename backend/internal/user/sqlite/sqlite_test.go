@@ -741,3 +741,266 @@ func TestDeleteUser_WithoutSubscription(t *testing.T) {
 		t.Errorf("FindByID() after delete: error = %v; want model.ErrNotFound", findErr)
 	}
 }
+
+func TestGetLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	got, err := repo.GetLimits(ctx, "free")
+	if err != nil {
+		t.Fatalf("GetLimits() error = %v", err)
+	}
+
+	if got.Tier != "free" {
+		t.Errorf("Tier = %q; want %q", got.Tier, "free")
+	}
+
+	if got.SecretsLimit != 5 {
+		t.Errorf("SecretsLimit = %d; want 5", got.SecretsLimit)
+	}
+
+	if got.RecipientsLimit != 1 {
+		t.Errorf("RecipientsLimit = %d; want 1", got.RecipientsLimit)
+	}
+}
+
+func TestGetLimits_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.GetLimits(ctx, "nonexistent")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("GetLimits() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestListLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	limits, err := repo.ListLimits(ctx)
+	if err != nil {
+		t.Fatalf("ListLimits() error = %v", err)
+	}
+
+	if len(limits) < 2 {
+		t.Fatalf("ListLimits() returned %d items; want at least 2", len(limits))
+	}
+
+	// Should be ordered by tier name: "free" before "pro".
+	if limits[0].Tier != "free" {
+		t.Errorf("limits[0].Tier = %q; want %q", limits[0].Tier, "free")
+	}
+
+	if limits[1].Tier != "pro" {
+		t.Errorf("limits[1].Tier = %q; want %q", limits[1].Tier, "pro")
+	}
+}
+
+func TestUpsertLimits_Insert(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	tl := &user.TierLimits{
+		Tier:            "vip",
+		SecretsLimit:    1000,
+		RecipientsLimit: 20,
+	}
+
+	if err := repo.UpsertLimits(ctx, tl); err != nil {
+		t.Fatalf("UpsertLimits() error = %v", err)
+	}
+
+	got, err := repo.GetLimits(ctx, "vip")
+	if err != nil {
+		t.Fatalf("GetLimits() error = %v", err)
+	}
+
+	if got.Tier != "vip" {
+		t.Errorf("Tier = %q; want %q", got.Tier, "vip")
+	}
+
+	if got.SecretsLimit != 1000 {
+		t.Errorf("SecretsLimit = %d; want 1000", got.SecretsLimit)
+	}
+
+	if got.RecipientsLimit != 20 {
+		t.Errorf("RecipientsLimit = %d; want 20", got.RecipientsLimit)
+	}
+}
+
+func TestUpsertLimits_Update(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	tl := &user.TierLimits{
+		Tier:            "pro",
+		SecretsLimit:    200,
+		RecipientsLimit: 50,
+	}
+
+	if err := repo.UpsertLimits(ctx, tl); err != nil {
+		t.Fatalf("UpsertLimits() error = %v", err)
+	}
+
+	got, err := repo.GetLimits(ctx, "pro")
+	if err != nil {
+		t.Fatalf("GetLimits() error = %v", err)
+	}
+
+	if got.SecretsLimit != 200 {
+		t.Errorf("SecretsLimit = %d; want 200", got.SecretsLimit)
+	}
+
+	if got.RecipientsLimit != 50 {
+		t.Errorf("RecipientsLimit = %d; want 50", got.RecipientsLimit)
+	}
+}
+
+func TestDeleteLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	if err := repo.DeleteLimits(ctx, "pro"); err != nil {
+		t.Fatalf("DeleteLimits() error = %v", err)
+	}
+
+	_, err := repo.GetLimits(ctx, "pro")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("GetLimits() after delete: error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestDeleteLimits_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.DeleteLimits(ctx, "nonexistent")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("DeleteLimits() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestTierExists(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	exists, err := repo.TierExists(ctx, "free")
+	if err != nil {
+		t.Fatalf("TierExists() error = %v", err)
+	}
+
+	if !exists {
+		t.Error("TierExists(\"free\") = false; want true")
+	}
+
+	exists, err = repo.TierExists(ctx, "nonexistent")
+	if err != nil {
+		t.Fatalf("TierExists() error = %v", err)
+	}
+
+	if exists {
+		t.Error("TierExists(\"nonexistent\") = true; want false")
+	}
+}
+
+func TestUpdateSecretsLimitOverride_Set(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-override-set",
+		Email:      "override-set@example.com",
+		Name:       "Override Set",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	limit := 500
+	if err := repo.UpdateSecretsLimitOverride(ctx, u.ID, &limit); err != nil {
+		t.Fatalf("UpdateSecretsLimitOverride() error = %v", err)
+	}
+
+	found, err := repo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	if found.SecretsLimitOverride == nil {
+		t.Fatal("SecretsLimitOverride = nil; want 500")
+	}
+
+	if *found.SecretsLimitOverride != 500 {
+		t.Errorf("SecretsLimitOverride = %d; want 500", *found.SecretsLimitOverride)
+	}
+}
+
+func TestUpdateSecretsLimitOverride_Clear(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-override-clear",
+		Email:      "override-clear@example.com",
+		Name:       "Override Clear",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	// Set override first.
+	limit := 500
+	if err := repo.UpdateSecretsLimitOverride(ctx, u.ID, &limit); err != nil {
+		t.Fatalf("UpdateSecretsLimitOverride() set error = %v", err)
+	}
+
+	// Clear override.
+	if err := repo.UpdateSecretsLimitOverride(ctx, u.ID, nil); err != nil {
+		t.Fatalf("UpdateSecretsLimitOverride() clear error = %v", err)
+	}
+
+	found, err := repo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	if found.SecretsLimitOverride != nil {
+		t.Errorf("SecretsLimitOverride = %v; want nil", *found.SecretsLimitOverride)
+	}
+}
+
+func TestUpdateSecretsLimitOverride_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	limit := 500
+	err := repo.UpdateSecretsLimitOverride(ctx, 99999, &limit)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("UpdateSecretsLimitOverride() error = %v; want model.ErrNotFound", err)
+	}
+}

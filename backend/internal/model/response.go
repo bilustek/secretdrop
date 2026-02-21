@@ -22,12 +22,13 @@ type RevealResponse struct {
 
 // MeResponse is the JSON body returned for the authenticated user profile.
 type MeResponse struct {
-	Email        string `json:"email"`
-	Name         string `json:"name"`
-	AvatarURL    string `json:"avatar_url"`
-	Tier         string `json:"tier"`
-	SecretsUsed  int    `json:"secrets_used"`
-	SecretsLimit int    `json:"secrets_limit"`
+	Email           string `json:"email"`
+	Name            string `json:"name"`
+	AvatarURL       string `json:"avatar_url"`
+	Tier            string `json:"tier"`
+	SecretsUsed     int    `json:"secrets_used"`
+	SecretsLimit    int    `json:"secrets_limit"`
+	RecipientsLimit int    `json:"recipients_limit"`
 }
 
 // ErrorResponse is the standard error envelope.

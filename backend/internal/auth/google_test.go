@@ -14,6 +14,7 @@ import (
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilusteknoloji/secretdrop/internal/user"
 	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
@@ -408,6 +409,10 @@ func (m *mockUserRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, 
 
 func (m *mockUserRepo) DeleteUser(_ context.Context, _ int64) error {
 	return errors.New("not implemented")
+}
+
+func (m *mockUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits, error) {
+	return nil, model.ErrNotFound
 }
 
 // errorResponse is a helper type for decoding error JSON responses.

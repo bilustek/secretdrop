@@ -22,6 +22,8 @@ type Repository interface {
 	FindUserByStripeCustomerID(ctx context.Context, customerID string) (*model.User, error)
 	UpdateSubscriptionStatus(ctx context.Context, stripeSubID, status string) error
 	UpdateSubscriptionPeriod(ctx context.Context, stripeSubID string, start, end time.Time) error
+
+	GetLimits(ctx context.Context, tier string) (*TierLimits, error)
 }
 
 // AdminRepository extends Repository with admin query operations.
@@ -32,6 +34,12 @@ type AdminRepository interface {
 	CountUsers(ctx context.Context, opts ...ListOption) (int64, error)
 	ListSubscriptions(ctx context.Context, opts ...ListOption) ([]*SubscriptionWithUser, error)
 	CountSubscriptions(ctx context.Context, opts ...ListOption) (int64, error)
+
+	ListLimits(ctx context.Context) ([]*TierLimits, error)
+	UpsertLimits(ctx context.Context, tl *TierLimits) error
+	DeleteLimits(ctx context.Context, tier string) error
+	UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error
+	TierExists(ctx context.Context, tier string) (bool, error)
 }
 
 // SubscriptionWithUser holds a subscription joined with its user's email and name.
