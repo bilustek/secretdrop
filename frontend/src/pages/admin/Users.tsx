@@ -236,7 +236,7 @@ export default function AdminUsers() {
                           <input
                             type="number"
                             min="1"
-                            placeholder="tier default"
+                            placeholder={String(tiers.find((t) => t.tier === user.tier)?.secrets_limit ?? user.secrets_limit)}
                             value={editLimitValue}
                             onChange={(e) => setEditLimitValue(e.target.value)}
                             onKeyDown={(e) => {
