@@ -52,6 +52,63 @@ func TestOpenAPISpecHasCORSHeader(t *testing.T) {
 	}
 }
 
+func TestRegisterDocs_WithProtect(t *testing.T) {
+	specContent := []byte("openapi: 3.0.0\ninfo:\n  title: Protected\n")
+	handler.SetOpenAPISpec(specContent)
+
+	protect := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Test-Auth") != "ok" {
+				http.Error(w, "forbidden", http.StatusForbidden)
+
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	mux := http.NewServeMux()
+	handler.RegisterDocs(mux, protect)
+
+	// Without auth header — blocked
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("unauthed /docs status = %d; want %d", rec.Code, http.StatusForbidden)
+	}
+
+	// With auth header — allowed
+	req = httptest.NewRequest(http.MethodGet, "/docs", nil)
+	req.Header.Set("X-Test-Auth", "ok")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("authed /docs status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	// Spec endpoint also protected
+	req = httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("unauthed /docs/openapi.yaml status = %d; want %d", rec.Code, http.StatusForbidden)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
+	req.Header.Set("X-Test-Auth", "ok")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("authed /docs/openapi.yaml status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
 func TestDocsUI(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterDocs(mux, nil)

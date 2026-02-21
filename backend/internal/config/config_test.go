@@ -7,9 +7,27 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/config"
 )
 
+func clearAllEnvVars(t *testing.T) {
+	t.Helper()
+
+	for _, key := range []string{
+		"GOLANG_ENV", "PORT", "DATABASE_URL", "RESEND_API_KEY",
+		"API_BASE_URL", "FRONTEND_BASE_URL", "FROM_EMAIL",
+		"SECRET_EXPIRY", "CLEANUP_INTERVAL",
+		"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+		"GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET",
+		"JWT_SECRET",
+		"STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID",
+		"SLACK_WEBHOOK_SUBSCRIPTIONS", "SLACK_WEBHOOK_NOTIFICATIONS",
+		"ADMIN_USERNAME", "ADMIN_PASSWORD",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestLoadDefaults(t *testing.T) {
+	clearAllEnvVars(t)
 	t.Setenv("GOLANG_ENV", "development")
-	t.Setenv("RESEND_API_KEY", "")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -476,7 +494,48 @@ func TestWithCleanupIntervalInvalid(t *testing.T) {
 	}
 }
 
+func TestAdminCredentials(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("RESEND_API_KEY", "")
+	t.Setenv("ADMIN_USERNAME", "myadmin")
+	t.Setenv("ADMIN_PASSWORD", "mysecret")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.AdminUsername() != "myadmin" {
+		t.Errorf("AdminUsername() = %q; want %q", cfg.AdminUsername(), "myadmin")
+	}
+
+	if cfg.AdminPassword() != "mysecret" {
+		t.Errorf("AdminPassword() = %q; want %q", cfg.AdminPassword(), "mysecret")
+	}
+}
+
+func TestAdminCredentials_Empty(t *testing.T) {
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("RESEND_API_KEY", "")
+	t.Setenv("ADMIN_USERNAME", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.AdminUsername() != "" {
+		t.Errorf("AdminUsername() = %q; want empty", cfg.AdminUsername())
+	}
+
+	if cfg.AdminPassword() != "" {
+		t.Errorf("AdminPassword() = %q; want empty", cfg.AdminPassword())
+	}
+}
+
 func TestLoadProductionRequiresAuthVars(t *testing.T) {
+	clearAllEnvVars(t)
 	t.Setenv("GOLANG_ENV", "production")
 	t.Setenv("RESEND_API_KEY", "re_test_key")
 
