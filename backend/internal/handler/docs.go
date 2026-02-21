@@ -24,9 +24,18 @@ func SetOpenAPISpec(spec []byte) {
 }
 
 // RegisterDocs registers the API documentation routes on the given mux.
-func RegisterDocs(mux *http.ServeMux) {
-	mux.HandleFunc("GET /docs/openapi.yaml", handleOpenAPISpec)
-	mux.HandleFunc("GET /docs", handleDocsUI)
+// If protect is not nil, it wraps the handlers with that middleware (e.g. BasicAuth).
+func RegisterDocs(mux *http.ServeMux, protect func(http.Handler) http.Handler) {
+	spec := http.HandlerFunc(handleOpenAPISpec)
+	ui := http.HandlerFunc(handleDocsUI)
+
+	if protect != nil {
+		mux.Handle("GET /docs/openapi.yaml", protect(spec))
+		mux.Handle("GET /docs", protect(ui))
+	} else {
+		mux.HandleFunc("GET /docs/openapi.yaml", handleOpenAPISpec)
+		mux.HandleFunc("GET /docs", handleDocsUI)
+	}
 }
 
 func handleOpenAPISpec(w http.ResponseWriter, _ *http.Request) {

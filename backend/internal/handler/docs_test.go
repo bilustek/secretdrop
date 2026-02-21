@@ -14,7 +14,7 @@ func TestOpenAPISpec(t *testing.T) {
 	handler.SetOpenAPISpec(specContent)
 
 	mux := http.NewServeMux()
-	handler.RegisterDocs(mux)
+	handler.RegisterDocs(mux, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
 	rec := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func TestOpenAPISpecHasCORSHeader(t *testing.T) {
 	handler.SetOpenAPISpec([]byte("openapi: 3.0.0"))
 
 	mux := http.NewServeMux()
-	handler.RegisterDocs(mux)
+	handler.RegisterDocs(mux, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/docs/openapi.yaml", nil)
 	rec := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestOpenAPISpecHasCORSHeader(t *testing.T) {
 
 func TestDocsUI(t *testing.T) {
 	mux := http.NewServeMux()
-	handler.RegisterDocs(mux)
+	handler.RegisterDocs(mux, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
 	rec := httptest.NewRecorder()

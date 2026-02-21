@@ -145,7 +145,6 @@ func Run() error {
 	mux.HandleFunc("POST /api/v1/contact", handler.NewContactHandler(sender))
 
 	handler.SetOpenAPISpec(docs.OpenAPISpec)
-	handler.RegisterDocs(mux)
 
 	// OAuth routes (public — no auth required)
 	googleCfg := auth.GoogleConfig(
@@ -178,6 +177,24 @@ func Run() error {
 	}
 
 	mux.HandleFunc("DELETE /api/v1/me", handler.NewDeleteAccountHandler(userRepo, canceller, subscriptionNotifier))
+
+	// Admin routes (conditional — only when ADMIN_USERNAME and ADMIN_PASSWORD are set)
+	if cfg.AdminUsername() != "" && cfg.AdminPassword() != "" {
+		adminAuth := middleware.BasicAuth(cfg.AdminUsername(), cfg.AdminPassword())
+		adminHandler := handler.NewAdminHandler(userRepo, billingSvc)
+		adminMux := http.NewServeMux()
+		adminHandler.Register(adminMux)
+
+		mux.Handle("/api/v1/admin/", adminAuth(adminMux))
+
+		handler.RegisterDocs(mux, adminAuth)
+
+		slog.Info("admin routes enabled")
+	} else {
+		handler.RegisterDocs(mux, nil)
+
+		slog.Info("admin routes disabled (ADMIN_USERNAME or ADMIN_PASSWORD not set)")
+	}
 
 	var chain http.Handler = mux
 	chain = middleware.RequireJSON(chain)
