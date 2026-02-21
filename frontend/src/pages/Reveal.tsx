@@ -31,7 +31,7 @@ export default function Reveal() {
 
   if (!token || !key) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-24 text-center">
+      <div className="max-w-5xl mx-auto px-4 py-24 text-center">
         <AlertTriangle size={32} className="mx-auto text-gray-400 mb-4" />
         <h2 className="text-xl font-semibold mb-2">Invalid Link</h2>
         <p className="text-gray-500">This secret link appears to be broken or incomplete.</p>
@@ -67,7 +67,7 @@ export default function Reveal() {
 
   if (secret !== null) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-24">
+      <div className="max-w-5xl mx-auto px-4 py-24">
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-6">
           <h2 className="font-semibold mb-4">Secret</h2>
           <div className="rounded-lg bg-gray-50 dark:bg-gray-900 p-4">
@@ -93,7 +93,7 @@ export default function Reveal() {
 
   if (error) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-24 text-center">
+      <div className="max-w-5xl mx-auto px-4 py-24 text-center">
         <AlertTriangle size={32} className="mx-auto text-gray-400 mb-4" />
         <h2 className="text-xl font-semibold mb-2">
           {error.type === "expired" || error.type === "already_viewed"
@@ -106,7 +106,7 @@ export default function Reveal() {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-24">
+    <div className="max-w-5xl mx-auto px-4 py-24">
       <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
         <Lock size={32} className="mx-auto text-gray-400 mb-4" />
         <h2 className="text-xl font-semibold mb-2">Someone sent you a secret</h2>
