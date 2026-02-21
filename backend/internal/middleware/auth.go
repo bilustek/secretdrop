@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/getsentry/sentry-go"
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
 )
@@ -39,6 +42,11 @@ func OptionalAuthenticate(authSvc *auth.Service) func(http.Handler) http.Handler
 			}
 
 			ctx := context.WithValue(r.Context(), userContextKey, claims)
+
+			if hub := sentry.GetHubFromContext(ctx); hub != nil {
+				hub.Scope().SetUser(sentry.User{ID: strconv.FormatInt(claims.UserID, 10)})
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -67,6 +75,11 @@ func Authenticate(authSvc *auth.Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userContextKey, claims)
+
+			if hub := sentry.GetHubFromContext(ctx); hub != nil {
+				hub.Scope().SetUser(sentry.User{ID: strconv.FormatInt(claims.UserID, 10)})
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
