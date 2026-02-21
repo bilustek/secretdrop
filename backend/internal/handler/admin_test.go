@@ -700,3 +700,320 @@ func TestAdminRegister(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminListLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/limits", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListLimits(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp []model.AdminLimitsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp) < 2 {
+		t.Errorf("len(limits) = %d; want >= 2 (free + pro seeded)", len(resp))
+	}
+}
+
+func TestAdminUpsertLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`{"secrets_limit":1000,"recipients_limit":20}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminLimitsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Tier != "vip" {
+		t.Errorf("tier = %q; want %q", resp.Tier, "vip")
+	}
+
+	if resp.SecretsLimit != 1000 {
+		t.Errorf("secrets_limit = %d; want 1000", resp.SecretsLimit)
+	}
+
+	if resp.RecipientsLimit != 20 {
+		t.Errorf("recipients_limit = %d; want 20", resp.RecipientsLimit)
+	}
+}
+
+func TestAdminUpsertLimits_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`not json`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpsertLimits_InvalidLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`{"secrets_limit":0,"recipients_limit":5}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminDeleteLimits(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+	mux.HandleFunc("DELETE /api/v1/admin/limits/{tier}", h.DeleteLimits)
+
+	// First, upsert a "vip" tier
+	upsertBody := strings.NewReader(`{"secrets_limit":500,"recipients_limit":10}`)
+	upsertReq := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", upsertBody)
+	upsertRec := httptest.NewRecorder()
+
+	mux.ServeHTTP(upsertRec, upsertReq)
+
+	if upsertRec.Code != http.StatusOK {
+		t.Fatalf("upsert status = %d; want %d", upsertRec.Code, http.StatusOK)
+	}
+
+	// Now delete it
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/limits/vip", nil)
+	deleteRec := httptest.NewRecorder()
+
+	mux.ServeHTTP(deleteRec, deleteReq)
+
+	if deleteRec.Code != http.StatusNoContent {
+		t.Errorf("status = %d; want %d", deleteRec.Code, http.StatusNoContent)
+	}
+}
+
+func TestAdminDeleteLimits_FreeTierProtected(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/limits/{tier}", h.DeleteLimits)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/limits/free", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminDeleteLimits_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/limits/{tier}", h.DeleteLimits)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/limits/nonexistent", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminUpdateUser_SecretsLimitOverride(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	u, _ := repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "override@example.com", Name: "Override User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"secrets_limit_override":500}`)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d", u.ID), body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	updated, err := repo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID error: %v", err)
+	}
+
+	if updated.SecretsLimitOverride == nil {
+		t.Fatal("SecretsLimitOverride = nil; want 500")
+	}
+
+	if *updated.SecretsLimitOverride != 500 {
+		t.Errorf("SecretsLimitOverride = %d; want 500", *updated.SecretsLimitOverride)
+	}
+}
+
+func TestAdminUpdateUser_ClearSecretsLimit(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	u, _ := repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "clear@example.com", Name: "Clear User",
+	})
+
+	// First set an override
+	overrideVal := 500
+	_ = repo.UpdateSecretsLimitOverride(ctx, u.ID, &overrideVal)
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"clear_secrets_limit":true}`)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d", u.ID), body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	updated, err := repo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID error: %v", err)
+	}
+
+	if updated.SecretsLimitOverride != nil {
+		t.Errorf("SecretsLimitOverride = %d; want nil", *updated.SecretsLimitOverride)
+	}
+}
+
+func TestAdminUpdateUser_NoFields(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	u, _ := repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "nofields@example.com", Name: "No Fields",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{}`)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d", u.ID), body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminListUsers_WithEffectiveLimit(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "effective@example.com", Name: "Effective User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Users) != 1 {
+		t.Fatalf("len(users) = %d; want 1", len(resp.Users))
+	}
+
+	// The user has tier "free" and no override, so effective limit should match
+	// the seeded free tier default (5) from the limits table.
+	if resp.Users[0].SecretsLimit != model.FreeTierLimit {
+		t.Errorf("secrets_limit = %d; want %d", resp.Users[0].SecretsLimit, model.FreeTierLimit)
+	}
+}
