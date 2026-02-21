@@ -60,7 +60,7 @@ export function Layout() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-semibold text-lg">
             <Lock size={20} />
-            SecretDrop
+            <span>Secret<span className="text-indigo-500 dark:text-indigo-400">Drop</span></span>
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle />
