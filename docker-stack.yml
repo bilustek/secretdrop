@@ -1,0 +1,54 @@
+services:
+  secretdrop_backend:
+    image: ghcr.io/bilusteknoloji/secretdrop/secretdrop-backend:latest
+    environment:
+      RESEND_API_KEY: "${RESEND_API_KEY}"
+      JWT_SECRET: "${JWT_SECRET}"
+      FROM_EMAIL: "${FROM_EMAIL}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"
+      GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET}"
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+      STRIPE_PRICE_ID: "${STRIPE_PRICE_ID}"
+      SLACK_WEBHOOK_SUBSCRIPTIONS: "${SLACK_WEBHOOK_SUBSCRIPTIONS}"
+      SLACK_WEBHOOK_NOTIFICATIONS: "${SLACK_WEBHOOK_NOTIFICATIONS}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+      SENTRY_DSN: "${SENTRY_DSN}"
+      API_BASE_URL: "${API_BASE_URL}"
+      FRONTEND_BASE_URL: "${FRONTEND_BASE_URL}"
+      
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/healthz"]
+      interval: 60s
+      retries: 5
+      timeout: 10s
+      start_period: 20s
+    networks:
+      - traefik_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      - "traefik.http.routers.secretdrop-backend.rule=Host(`api.secretdrop.us`)"
+      - "traefik.http.routers.secretdrop-backend.entrypoints=websecure"
+      - "traefik.http.routers.secretdrop-backend.tls=true"
+      - "traefik.http.routers.secretdrop-backend.tls.certresolver=infracert"
+      - "traefik.http.services.secretdrop-backend.loadbalancer.server.port=8080"
+
+  secretdrop_frontend:
+    image: ghcr.io/bilusteknoloji/secretdrop/secretdrop-frontend:latest
+    networks:
+      - traefik_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.secretdrop-frontend.rule=Host(`secretdrop.us`)"
+      - "traefik.http.routers.secretdrop-frontend.entrypoints=websecure"
+      - "traefik.http.routers.secretdrop-frontend.tls=true"
+      - "traefik.http.routers.secretdrop-frontend.tls.certresolver=infracert"
+      - "traefik.http.services.secretdrop-frontend.loadbalancer.server.port=80"
+
+networks:
+  traefik_net:
+    external: true
