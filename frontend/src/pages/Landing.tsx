@@ -1,9 +1,58 @@
-import { use, useEffect, useState } from "react"
+import { use, useCallback, useEffect, useState } from "react"
 import { Navigate } from "react-router"
 import { Shield, Mail, Flame } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 
 const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
+
+const HEADLINES = [
+  "Share secrets that disappear after one read.",
+  "Stop pasting API keys in Slack.",
+  "One-time links. Zero-knowledge encryption.",
+  "Share .env variables without the risk.",
+  "Encrypted. Delivered. Destroyed.",
+]
+
+const TYPE_SPEED = 50
+const DELETE_SPEED = 30
+const PAUSE_AFTER_TYPE = 2000
+const PAUSE_AFTER_DELETE = 400
+
+function useTypewriter(phrases: string[]) {
+  const [index, setIndex] = useState(0)
+  const [text, setText] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const tick = useCallback(() => {
+    const current = phrases[index]
+
+    if (!isDeleting) {
+      setText(current.slice(0, text.length + 1))
+      if (text.length + 1 === current.length) {
+        setTimeout(() => setIsDeleting(true), PAUSE_AFTER_TYPE)
+        return
+      }
+    } else {
+      setText(current.slice(0, text.length - 1))
+      if (text.length - 1 === 0) {
+        setIsDeleting(false)
+        setIndex((index + 1) % phrases.length)
+        return
+      }
+    }
+  }, [phrases, index, text, isDeleting])
+
+  useEffect(() => {
+    let delay = isDeleting ? DELETE_SPEED : TYPE_SPEED
+    if (!isDeleting && text === phrases[index]) delay = PAUSE_AFTER_TYPE
+    if (isDeleting && text === "") delay = PAUSE_AFTER_DELETE
+
+    const timer = setTimeout(tick, delay)
+    return () => clearTimeout(timer)
+  }, [tick, isDeleting, text, phrases, index])
+
+  return text
+}
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -26,6 +75,7 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export default function Landing() {
   const auth = use(AuthContext)
+  const headline = useTypewriter(HEADLINES)
 
   const [signInOpen, setSignInOpen] = useState(false)
 
@@ -46,14 +96,12 @@ export default function Landing() {
     <div>
       {/* Hero */}
       <section className="max-w-3xl mx-auto px-4 py-24 text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Share secrets that disappear
-          <br />
-          after one read.
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight h-[2.8em] sm:h-[1.4em] flex items-center justify-center">
+          <span>
+            {headline}
+            <span className="inline-block w-[3px] h-[1em] bg-gray-900 dark:bg-white ml-0.5 align-middle animate-blink" />
+          </span>
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-          End-to-end encrypted. Zero-knowledge. One-time links.
-        </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           {showGoogle && (
             <a
