@@ -116,7 +116,7 @@ secretdrop/
 | `ADMIN_USERNAME` | No | — |
 | `ADMIN_PASSWORD` | No | — |
 | `SENTRY_DSN` | No | — |
-| `SENTRY_TRACES_SAMPLE_RATE` | No | `0.1` |
+| `SENTRY_TRACES_SAMPLE_RATE` | No | `1.0` |
 
 ## Frontend Routes
 

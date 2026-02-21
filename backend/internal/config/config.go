@@ -17,7 +17,7 @@ const (
 	defaultSecretExpiry           = 10 * time.Minute
 	defaultCleanupInterval        = 1 * time.Minute
 	defaultEnv                    = "production"
-	defaultSentryTracesSampleRate = 0.1
+	defaultSentryTracesSampleRate = 1.0
 )
 
 // Config holds all application configuration derived from environment variables.
