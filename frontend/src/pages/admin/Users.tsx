@@ -193,7 +193,7 @@ export default function AdminUsers() {
                 {data.users.map((user) => (
                   <tr
                     key={user.id}
-                    className="border-b border-gray-200 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+                    className="group border-b border-gray-200 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
                   >
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{user.email}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{user.name}</td>
@@ -238,7 +238,20 @@ export default function AdminUsers() {
                           </button>
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditLimitUserId(user.id)
+                            setEditLimitValue(
+                              user.secrets_limit_override !== null
+                                ? String(user.secrets_limit_override)
+                                : "",
+                            )
+                            setActionError("")
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          title="Click to edit limit"
+                        >
                           <span>
                             {user.secrets_used}/{user.secrets_limit}
                           </span>
@@ -247,23 +260,8 @@ export default function AdminUsers() {
                               custom
                             </span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditLimitUserId(user.id)
-                              setEditLimitValue(
-                                user.secrets_limit_override !== null
-                                  ? String(user.secrets_limit_override)
-                                  : "",
-                              )
-                              setActionError("")
-                            }}
-                            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Edit limit override"
-                          >
-                            <Pencil size={12} />
-                          </button>
-                        </span>
+                          <Pencil size={12} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
