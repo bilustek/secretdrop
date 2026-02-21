@@ -19,7 +19,13 @@ services:
       SENTRY_DSN: "${SENTRY_DSN}"
       API_BASE_URL: "${API_BASE_URL}"
       FRONTEND_BASE_URL: "${FRONTEND_BASE_URL}"
-      
+    volumes:
+      - secretdrop_data:/app/db
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == db-node
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/healthz"]
       interval: 60s
@@ -48,6 +54,9 @@ services:
       - "traefik.http.routers.secretdrop-frontend.tls=true"
       - "traefik.http.routers.secretdrop-frontend.tls.certresolver=infracert"
       - "traefik.http.services.secretdrop-frontend.loadbalancer.server.port=80"
+
+volumes:
+  secretdrop_data: null
 
 networks:
   traefik_net:
