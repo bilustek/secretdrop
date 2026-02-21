@@ -20,6 +20,7 @@ func clearAllEnvVars(t *testing.T) {
 		"STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID",
 		"SLACK_WEBHOOK_SUBSCRIPTIONS", "SLACK_WEBHOOK_NOTIFICATIONS",
 		"ADMIN_USERNAME", "ADMIN_PASSWORD",
+		"SENTRY_DSN", "SENTRY_TRACES_SAMPLE_RATE",
 	} {
 		t.Setenv(key, "")
 	}
@@ -593,5 +594,102 @@ func TestLoadProductionWithAllVars(t *testing.T) {
 
 	if cfg.StripePriceID() != "price_123" {
 		t.Errorf("StripePriceID() = %q; want %q", cfg.StripePriceID(), "price_123")
+	}
+}
+
+func TestSentryDefaults(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.SentryDSN() != "" {
+		t.Errorf("SentryDSN() = %q; want empty", cfg.SentryDSN())
+	}
+
+	if cfg.SentryTracesSampleRate() != 1.0 {
+		t.Errorf("SentryTracesSampleRate() = %v; want 1.0", cfg.SentryTracesSampleRate())
+	}
+}
+
+func TestSentryFromEnvVars(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("SENTRY_DSN", "https://key@sentry.io/123")
+	t.Setenv("SENTRY_TRACES_SAMPLE_RATE", "0.5")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.SentryDSN() != "https://key@sentry.io/123" {
+		t.Errorf("SentryDSN() = %q; want %q", cfg.SentryDSN(), "https://key@sentry.io/123")
+	}
+
+	if cfg.SentryTracesSampleRate() != 0.5 {
+		t.Errorf("SentryTracesSampleRate() = %v; want 0.5", cfg.SentryTracesSampleRate())
+	}
+}
+
+func TestSentryInvalidTracesSampleRate(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("SENTRY_TRACES_SAMPLE_RATE", "notanumber")
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("Load() should fail with invalid SENTRY_TRACES_SAMPLE_RATE")
+	}
+}
+
+func TestWithSentryDSN(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	cfg, err := config.Load(config.WithSentryDSN("https://custom@sentry.io/456"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.SentryDSN() != "https://custom@sentry.io/456" {
+		t.Errorf("SentryDSN() = %q; want %q", cfg.SentryDSN(), "https://custom@sentry.io/456")
+	}
+}
+
+func TestWithSentryTracesSampleRate(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	cfg, err := config.Load(config.WithSentryTracesSampleRate(0.25))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.SentryTracesSampleRate() != 0.25 {
+		t.Errorf("SentryTracesSampleRate() = %v; want 0.25", cfg.SentryTracesSampleRate())
+	}
+}
+
+func TestWithSentryTracesSampleRateInvalidNegative(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	_, err := config.Load(config.WithSentryTracesSampleRate(-0.1))
+	if err == nil {
+		t.Fatal("WithSentryTracesSampleRate(-0.1) should fail")
+	}
+}
+
+func TestWithSentryTracesSampleRateInvalidAboveOne(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	_, err := config.Load(config.WithSentryTracesSampleRate(1.5))
+	if err == nil {
+		t.Fatal("WithSentryTracesSampleRate(1.5) should fail")
 	}
 }
