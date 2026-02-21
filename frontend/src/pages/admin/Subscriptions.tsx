@@ -11,17 +11,25 @@ export default function AdminSubscriptions() {
   const [data, setData] = useState<AdminSubscriptionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [page, setPage] = useState(1)
   const [confirmSub, setConfirmSub] = useState<AdminSubscription | null>(null)
   const [actionError, setActionError] = useState("")
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true)
     setError("")
     try {
       const result = await adminApi.fetchSubscriptions({
+        q: debouncedSearch || undefined,
         status: statusFilter || undefined,
         sort: "created_at",
         order: sortOrder,
@@ -34,7 +42,7 @@ export default function AdminSubscriptions() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, sortOrder, page])
+  }, [debouncedSearch, statusFilter, sortOrder, page])
 
   useEffect(() => {
     fetchSubscriptions()
@@ -78,6 +86,16 @@ export default function AdminSubscriptions() {
           )}
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Search by email or name..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white sm:w-64"
+          />
           <select
             value={statusFilter}
             onChange={(e) => {
