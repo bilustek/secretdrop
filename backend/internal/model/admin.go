@@ -2,13 +2,15 @@ package model
 
 // AdminUserResponse represents a user in admin list responses.
 type AdminUserResponse struct {
-	ID          int64  `json:"id"`
-	Email       string `json:"email"`
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
-	Tier        string `json:"tier"`
-	SecretsUsed int    `json:"secrets_used"`
-	CreatedAt   string `json:"created_at"`
+	ID                   int64  `json:"id"`
+	Email                string `json:"email"`
+	Name                 string `json:"name"`
+	Provider             string `json:"provider"`
+	Tier                 string `json:"tier"`
+	SecretsUsed          int    `json:"secrets_used"`
+	SecretsLimit         int    `json:"secrets_limit"`
+	SecretsLimitOverride *int   `json:"secrets_limit_override"`
+	CreatedAt            string `json:"created_at"`
 }
 
 // AdminUsersListResponse is the paginated list of users.
@@ -41,7 +43,22 @@ type AdminSubscriptionsListResponse struct {
 	PerPage       int                         `json:"per_page"`
 }
 
-// AdminUpdateTierRequest is the body for PATCH /api/v1/admin/users/{id}.
-type AdminUpdateTierRequest struct {
-	Tier string `json:"tier"`
+// AdminUpdateUserRequest is the body for PATCH /api/v1/admin/users/{id}.
+type AdminUpdateUserRequest struct {
+	Tier                 *string `json:"tier,omitempty"`
+	SecretsLimitOverride *int    `json:"secrets_limit_override,omitempty"`
+	ClearSecretsLimit    bool    `json:"clear_secrets_limit,omitempty"`
+}
+
+// AdminLimitsResponse represents a tier limit configuration.
+type AdminLimitsResponse struct {
+	Tier            string `json:"tier"`
+	SecretsLimit    int    `json:"secrets_limit"`
+	RecipientsLimit int    `json:"recipients_limit"`
+}
+
+// AdminUpsertLimitsRequest is the body for PUT /api/v1/admin/limits/{tier}.
+type AdminUpsertLimitsRequest struct {
+	SecretsLimit    int `json:"secrets_limit"`
+	RecipientsLimit int `json:"recipients_limit"`
 }

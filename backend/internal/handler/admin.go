@@ -93,20 +93,34 @@ func (h *AdminHandler) UpdateTier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req model.AdminUpdateTierRequest
-	if err := readJSON(r, &req); err != nil {
+	var req model.AdminUpdateUserRequest
+	if jsonErr := readJSON(r, &req); jsonErr != nil {
 		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
 
 		return
 	}
 
-	if req.Tier != model.TierFree && req.Tier != model.TierPro {
-		writeError(w, errTypeValidaton, "Tier must be 'free' or 'pro'", http.StatusBadRequest)
+	if req.Tier == nil {
+		writeError(w, errTypeValidaton, "Tier is required", http.StatusBadRequest)
 
 		return
 	}
 
-	if err := h.repo.UpdateTier(r.Context(), id, req.Tier); err != nil {
+	exists, err := h.repo.TierExists(r.Context(), *req.Tier)
+	if err != nil {
+		slog.Error("admin check tier exists", errKeyError, err)
+		writeError(w, errTypeInternal, "Failed to validate tier", http.StatusInternalServerError)
+
+		return
+	}
+
+	if !exists {
+		writeError(w, errTypeValidaton, "Unknown tier", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := h.repo.UpdateTier(r.Context(), id, *req.Tier); err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			writeError(w, "not_found", "User not found", http.StatusNotFound)
 		} else {
