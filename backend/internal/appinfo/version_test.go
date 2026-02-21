@@ -1,10 +1,13 @@
 package appinfo_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 )
+
+var semverRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 func TestVersionIsSet(t *testing.T) {
 	t.Parallel()
@@ -13,7 +16,7 @@ func TestVersionIsSet(t *testing.T) {
 		t.Error("Version should not be empty")
 	}
 
-	if appinfo.Version != "0.0.0" {
-		t.Errorf("Version = %q; want %q", appinfo.Version, "0.0.0")
+	if !semverRe.MatchString(appinfo.Version) {
+		t.Errorf("Version = %q; want semver format (x.y.z)", appinfo.Version)
 	}
 }
