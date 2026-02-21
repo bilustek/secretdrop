@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { ArrowUp, ArrowDown, Pencil, X } from "lucide-react"
-import { adminApi, type AdminUser, type AdminUsersResponse, type TierLimits } from "../../api/admin"
-import { ConfirmModal } from "../../components/ConfirmModal"
+import { adminApi, type AdminUsersResponse, type TierLimits } from "../../api/admin"
 
 const PER_PAGE = 20
 
@@ -17,7 +16,6 @@ export default function AdminUsers() {
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [page, setPage] = useState(1)
-  const [confirmUser, setConfirmUser] = useState<AdminUser | null>(null)
   const [actionError, setActionError] = useState("")
   const [tiers, setTiers] = useState<TierLimits[]>([])
   const [editLimitUserId, setEditLimitUserId] = useState<number | null>(null)
@@ -70,18 +68,6 @@ export default function AdminUsers() {
       setSortOrder("asc")
     }
     setPage(1)
-  }
-
-  const handleTierChange = async (user: AdminUser) => {
-    setConfirmUser(null)
-    setActionError("")
-    try {
-      const newTier = user.tier === "free" ? "pro" : "free"
-      await adminApi.updateUser(user.id, { tier: newTier })
-      await fetchUsers()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to update tier")
-    }
   }
 
   const handleLimitSave = async (userId: number) => {
@@ -201,9 +187,6 @@ export default function AdminUsers() {
                     Created At
                     <SortIndicator field="created_at" />
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Actions
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -286,15 +269,6 @@ export default function AdminUsers() {
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmUser(user)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-                      >
-                        {user.tier === "free" ? "Upgrade to Pro" : "Downgrade to Free"}
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -327,15 +301,6 @@ export default function AdminUsers() {
         <div className="text-center py-16 text-gray-500 dark:text-gray-400">No users found.</div>
       )}
 
-      {confirmUser && (
-        <ConfirmModal
-          title="Change User Tier"
-          message={`Are you sure you want to ${confirmUser.tier === "free" ? "upgrade" : "downgrade"} ${confirmUser.email} to ${confirmUser.tier === "free" ? "Pro" : "Free"}?`}
-          confirmLabel={confirmUser.tier === "free" ? "Upgrade to Pro" : "Downgrade to Free"}
-          onConfirm={() => handleTierChange(confirmUser)}
-          onCancel={() => setConfirmUser(null)}
-        />
-      )}
     </div>
   )
 }
