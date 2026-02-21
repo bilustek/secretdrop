@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_subscription_id);
+CREATE TABLE IF NOT EXISTS limits (
+    tier             TEXT PRIMARY KEY,
+    secrets_limit    INTEGER NOT NULL DEFAULT 5,
+    recipients_limit INTEGER NOT NULL DEFAULT 1
+);
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('free', 5, 1);
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('pro', 100, 5);
 `
 
 const (
@@ -74,6 +81,9 @@ func New(dsn string) (*Repository, error) {
 
 		return nil, fmt.Errorf("run migration: %w", err)
 	}
+
+	// Add secrets_limit column if it doesn't exist (SQLite has no ADD COLUMN IF NOT EXISTS).
+	_, _ = db.Exec("ALTER TABLE users ADD COLUMN secrets_limit INTEGER")
 
 	return &Repository{db: db}, nil
 }
