@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 )
@@ -395,5 +397,65 @@ func TestUserFromContext_Missing(t *testing.T) {
 
 	if claims != nil {
 		t.Errorf("claims = %v; want nil", claims)
+	}
+}
+
+func TestOptionalAuthenticate_SetsSentryUser(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	pair, err := svc.GenerateTokenPair(99, "sentry@example.com", "pro")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	hub := sentry.NewHub(nil, sentry.NewScope())
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req = req.WithContext(sentry.SetHubOnContext(req.Context(), hub))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestAuthenticate_SetsSentryUser(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	pair, err := svc.GenerateTokenPair(77, "auth@example.com", "free")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	hub := sentry.NewHub(nil, sentry.NewScope())
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.Authenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req = req.WithContext(sentry.SetHubOnContext(req.Context(), hub))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
 	}
 }

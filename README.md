@@ -26,6 +26,7 @@ deleted** from the database — no trace left.
 | Google OAuth app | — | [console.cloud.google.com](https://console.cloud.google.com) |
 | GitHub OAuth app | — | [github.com/settings/developers](https://github.com/settings/developers) |
 | Stripe account | — | [stripe.com](https://stripe.com) → grab API keys |
+| Sentry account | — (optional) | [sentry.io](https://sentry.io) → create a Go project |
 
 ## Quick Start
 
@@ -77,6 +78,10 @@ export SLACK_WEBHOOK_NOTIFICATIONS="https://hooks.slack.com/services/xxx"
 # Admin (optional — enables admin panel and protects /docs)
 export ADMIN_USERNAME=admin
 export ADMIN_PASSWORD=change-me-to-a-strong-password
+
+# Sentry (optional — error tracking and performance monitoring)
+export SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+export SENTRY_TRACES_SAMPLE_RATE=1.0
 ```
 
 ## API Endpoints
@@ -294,6 +299,7 @@ secretdrop/
 │       ├── middleware/         # Request ID, logging, auth, content-type
 │       ├── model/              # Domain models, request/response, errors
 │       ├── repository/         # Secret repository (SQLite)
+│       ├── sentry/            # Sentry init + slog handler
 │       ├── service/            # Business logic (create/reveal + limits)
 │       └── user/               # User repository (SQLite, users + subscriptions)
 ├── frontend/                   # React/TypeScript SPA

@@ -4,18 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
 const (
-	defaultPort            = "8080"
-	defaultDatabaseURL     = "file:db/secretdrop.db?_journal_mode=WAL"
-	defaultAPIBaseURL      = "http://localhost:8080"
-	defaultFrontendBaseURL = "http://localhost:3000"
-	defaultFromEmail       = "SecretDrop <noreply@secretdrop.us>"
-	defaultSecretExpiry    = 10 * time.Minute
-	defaultCleanupInterval = 1 * time.Minute
-	defaultEnv             = "production"
+	defaultPort                   = "8080"
+	defaultDatabaseURL            = "file:db/secretdrop.db?_journal_mode=WAL"
+	defaultAPIBaseURL             = "http://localhost:8080"
+	defaultFrontendBaseURL        = "http://localhost:3000"
+	defaultFromEmail              = "SecretDrop <noreply@secretdrop.us>"
+	defaultSecretExpiry           = 10 * time.Minute
+	defaultCleanupInterval        = 1 * time.Minute
+	defaultEnv                    = "production"
+	defaultSentryTracesSampleRate = 1.0
 )
 
 // Config holds all application configuration derived from environment variables.
@@ -44,6 +46,9 @@ type Config struct {
 
 	adminUsername string
 	adminPassword string
+
+	sentryDSN              string
+	sentryTracesSampleRate float64
 }
 
 // Option configures a Config value.
@@ -166,6 +171,28 @@ func WithCleanupInterval(d time.Duration) Option {
 	}
 }
 
+// WithSentryDSN sets the Sentry DSN.
+func WithSentryDSN(dsn string) Option {
+	return func(c *Config) error {
+		c.sentryDSN = dsn
+
+		return nil
+	}
+}
+
+// WithSentryTracesSampleRate sets the Sentry traces sample rate.
+func WithSentryTracesSampleRate(rate float64) Option {
+	return func(c *Config) error {
+		if rate < 0 || rate > 1 {
+			return errors.New("sentry traces sample rate must be between 0 and 1")
+		}
+
+		c.sentryTracesSampleRate = rate
+
+		return nil
+	}
+}
+
 // Env returns the application environment.
 func (c *Config) Env() string { return c.env }
 
@@ -229,6 +256,12 @@ func (c *Config) AdminUsername() string { return c.adminUsername }
 // AdminPassword returns the admin Basic Auth password.
 func (c *Config) AdminPassword() string { return c.adminPassword }
 
+// SentryDSN returns the Sentry DSN. Empty means Sentry is disabled.
+func (c *Config) SentryDSN() string { return c.sentryDSN }
+
+// SentryTracesSampleRate returns the Sentry traces sample rate.
+func (c *Config) SentryTracesSampleRate() float64 { return c.sentryTracesSampleRate }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -278,6 +311,18 @@ func Load(opts ...Option) (*Config, error) {
 
 	c.adminUsername = os.Getenv("ADMIN_USERNAME")
 	c.adminPassword = os.Getenv("ADMIN_PASSWORD")
+
+	c.sentryDSN = os.Getenv("SENTRY_DSN")
+	c.sentryTracesSampleRate = defaultSentryTracesSampleRate
+
+	if v := os.Getenv("SENTRY_TRACES_SAMPLE_RATE"); v != "" {
+		rate, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse SENTRY_TRACES_SAMPLE_RATE: %w", err)
+		}
+
+		c.sentryTracesSampleRate = rate
+	}
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {

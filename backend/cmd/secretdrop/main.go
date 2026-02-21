@@ -12,6 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
+
 	"github.com/bilusteknoloji/secretdrop/docs"
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
@@ -24,6 +27,8 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/handler"
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
 	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
+	sentrypkg "github.com/bilusteknoloji/secretdrop/internal/sentry"
+	sentryslog "github.com/bilusteknoloji/secretdrop/internal/sentry/sloghandler"
 	"github.com/bilusteknoloji/secretdrop/internal/service"
 	slackpkg "github.com/bilusteknoloji/secretdrop/internal/slack"
 	slackconsole "github.com/bilusteknoloji/secretdrop/internal/slack/console"
@@ -66,9 +71,26 @@ func Run() error {
 		errorNotifier = selectNotifier(cfg.SlackWebhookNotifications())
 	}
 
-	// Logger with Slack error handler
-	baseHandler := slog.NewJSONHandler(os.Stdout, nil)
-	logger := slog.New(sloghandler.New(baseHandler, errorNotifier))
+	// Sentry error tracking (enabled when SENTRY_DSN is set)
+	if cfg.SentryDSN() != "" {
+		if initErr := sentrypkg.Init(cfg.SentryDSN(), cfg.Env(), cfg.SentryTracesSampleRate()); initErr != nil {
+			return fmt.Errorf("init sentry: %w", initErr)
+		}
+
+		defer sentry.Flush(2 * time.Second)
+
+		slog.Info("sentry enabled", "environment", cfg.Env())
+	}
+
+	// Logger with Slack error handler (and optional Sentry bridge)
+	var logHandler slog.Handler = slog.NewJSONHandler(os.Stdout, nil)
+	logHandler = sloghandler.New(logHandler, errorNotifier)
+
+	if cfg.SentryDSN() != "" {
+		logHandler = sentryslog.New(logHandler)
+	}
+
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
 	// Ensure database directory exists.
@@ -201,6 +223,13 @@ func Run() error {
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
+
+	if cfg.SentryDSN() != "" {
+		sentryHandler := sentryhttp.New(sentryhttp.Options{
+			Repanic: true,
+		})
+		chain = sentryHandler.Handle(chain)
+	}
 
 	addr := ":" + cfg.Port()
 	srv := &http.Server{

@@ -14,6 +14,7 @@ and auto-deleted after one-time reveal or expiry.
 - Google + GitHub OAuth via golang.org/x/oauth2
 - JWT auth via github.com/golang-jwt/jwt/v5
 - Stripe billing via github.com/stripe/stripe-go/v82
+- Sentry error tracking via github.com/getsentry/sentry-go
 
 ## Project Structure
 
@@ -39,6 +40,8 @@ secretdrop/
 │       │   ├── console/       # Console logger (development)
 │       │   └── noop/          # No-op sender (testing)
 │       ├── handler/           # HTTP handlers + JSON helpers
+│       ├── sentry/            # Sentry init + slog handler
+│       │   └── sloghandler/   # Custom slog.Handler for Sentry error forwarding
 │       ├── slack/             # Slack notifier interface
 │       │   ├── webhook/       # Slack webhook implementation
 │       │   ├── console/       # Console logger (development)
@@ -112,6 +115,8 @@ secretdrop/
 | `SLACK_WEBHOOK_NOTIFICATIONS` | No | — |
 | `ADMIN_USERNAME` | No | — |
 | `ADMIN_PASSWORD` | No | — |
+| `SENTRY_DSN` | No | — |
+| `SENTRY_TRACES_SAMPLE_RATE` | No | `1.0` |
 
 ## Frontend Routes
 
