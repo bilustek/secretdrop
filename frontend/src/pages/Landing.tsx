@@ -178,7 +178,7 @@ export default function Landing() {
 
       {/* How It Works — Trust Section */}
       <section className="border-t border-gray-200 dark:border-gray-800">
-        <div className="max-w-2xl mx-auto px-4 py-20">
+        <div className="max-w-2xl mx-auto px-4 pt-20 pb-10">
           <h2 className="text-2xl font-bold text-center mb-3">
             Why you can trust SecretDrop
           </h2>
