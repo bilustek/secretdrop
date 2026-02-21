@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { ArrowUp, ArrowDown } from "lucide-react"
+import { ArrowUp, ArrowDown, Copy, Check } from "lucide-react"
 import { adminApi, type AdminSubscription, type AdminSubscriptionsResponse } from "../../api/admin"
 import { ConfirmModal } from "../../components/ConfirmModal"
 
@@ -18,6 +18,7 @@ export default function AdminSubscriptions() {
   const [page, setPage] = useState(1)
   const [confirmSub, setConfirmSub] = useState<AdminSubscription | null>(null)
   const [actionError, setActionError] = useState("")
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -170,9 +171,23 @@ export default function AdminSubscriptions() {
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{sub.user_email}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{sub.user_name}</td>
                     <td className="px-4 py-3">
-                      <span className="font-mono text-gray-900 dark:text-gray-100 truncate block max-w-[160px]" title={sub.stripe_subscription_id}>
-                        {sub.stripe_subscription_id}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(sub.stripe_subscription_id)
+                          setCopiedId(sub.stripe_subscription_id)
+                          setTimeout(() => setCopiedId(null), 1500)
+                        }}
+                        className="group flex items-center gap-1.5 font-mono text-gray-900 dark:text-gray-100 truncate max-w-[160px] hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        title={sub.stripe_subscription_id}
+                      >
+                        <span className="truncate">{sub.stripe_subscription_id}</span>
+                        {copiedId === sub.stripe_subscription_id ? (
+                          <Check size={14} className="shrink-0 text-green-500" />
+                        ) : (
+                          <Copy size={14} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <span

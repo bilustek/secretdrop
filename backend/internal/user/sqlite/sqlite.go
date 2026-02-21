@@ -459,8 +459,8 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 	var clauses []string
 
 	if q.Search != "" {
-		clauses = append(clauses, "email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(email LIKE ? OR name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if q.Tier != "" {
@@ -527,8 +527,8 @@ func (r *Repository) CountUsers(ctx context.Context, opts ...user.ListOption) (i
 	var clauses []string
 
 	if q.Search != "" {
-		clauses = append(clauses, "email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(email LIKE ? OR name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if q.Tier != "" {
@@ -570,8 +570,8 @@ func (r *Repository) ListSubscriptions(
 	}
 
 	if q.Search != "" {
-		clauses = append(clauses, "u.email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(u.email LIKE ? OR u.name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if len(clauses) > 0 {
@@ -639,8 +639,8 @@ func (r *Repository) CountSubscriptions(ctx context.Context, opts ...user.ListOp
 	}
 
 	if q.Search != "" {
-		clauses = append(clauses, "u.email LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		clauses = append(clauses, "(u.email LIKE ? OR u.name LIKE ?)")
+		args = append(args, "%"+q.Search+"%", "%"+q.Search+"%")
 	}
 
 	if len(clauses) > 0 {
