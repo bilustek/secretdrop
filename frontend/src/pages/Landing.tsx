@@ -1,6 +1,6 @@
 import { use, useCallback, useEffect, useState } from "react"
 import { Navigate } from "react-router"
-import { Shield, Mail, Flame } from "lucide-react"
+import { Shield, Mail, Flame, KeyRound, Hash, Eye, Database, Github } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 
 const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
@@ -171,6 +171,84 @@ export default function Landing() {
             <h3 className="font-semibold mb-2">Burn After Reading</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Secrets are permanently deleted after viewing or when they expire.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works — Trust Section */}
+      <section className="border-t border-gray-200 dark:border-gray-800">
+        <div className="max-w-4xl mx-auto px-4 py-20">
+          <h2 className="text-2xl font-bold text-center mb-3">
+            Why you can trust SecretDrop
+          </h2>
+          <p className="text-center text-gray-500 dark:text-gray-400 mb-12 max-w-2xl mx-auto">
+            We designed SecretDrop so that <span className="text-gray-900 dark:text-white font-medium">even we cannot read your secrets</span>. Here's how.
+          </p>
+
+          <div className="space-y-10">
+            <div className="flex gap-5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center">
+                <KeyRound size={20} className="text-indigo-500 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">The encryption key never reaches our servers</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                  When you create a secret, a random AES-256-GCM key is generated <span className="font-medium text-gray-900 dark:text-white">in your browser</span>.
+                  The key is placed in the URL fragment (<code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">#</code> part) — browsers and proxies
+                  never send this to the server. We only store the encrypted ciphertext.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center">
+                <Hash size={20} className="text-indigo-500 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">Recipient-bound decryption via HKDF</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Each key is derived using HKDF-SHA256 bound to the recipient's email. Even if someone intercepts the link,
+                  they cannot decrypt it without the exact email address. We store only a SHA-256 hash of the email — the raw
+                  address is never persisted.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center">
+                <Eye size={20} className="text-indigo-500 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">One read, then gone forever</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Once a recipient opens the link, the encrypted record is <span className="font-medium text-gray-900 dark:text-white">permanently deleted</span> from
+                  the database. A second request returns 404. Unread secrets are automatically purged after expiry.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center">
+                <Database size={20} className="text-indigo-500 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">Database breach? Still safe.</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Even with full database access, an attacker would find only AES-256-GCM ciphertext and hashed emails.
+                  Without the key (which only exists in the one-time link), the data is computationally impossible to decrypt.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-14 text-center border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 mb-3">
+              <Github size={20} className="text-gray-700 dark:text-gray-300" />
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed max-w-lg mx-auto">
+              Don't just take our word for it. SecretDrop will be released as <span className="font-medium text-gray-900 dark:text-white">open source under the MIT license</span> soon
+              — so you can audit every line of code yourself.
             </p>
           </div>
         </div>
