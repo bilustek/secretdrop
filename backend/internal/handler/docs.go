@@ -12,8 +12,11 @@ const docsHTML = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body>
-  <script id="api-reference" data-url="/docs/openapi.yaml"></script>
+  <div id="app"></div>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script>
+    Scalar.createApiReference('#app', { url: '/docs/openapi.yaml' })
+  </script>
 </body>
 </html>`
 
@@ -29,11 +32,12 @@ func RegisterDocs(mux *http.ServeMux, protect func(http.Handler) http.Handler) {
 	spec := http.HandlerFunc(handleOpenAPISpec)
 	ui := http.HandlerFunc(handleDocsUI)
 
+	// OpenAPI spec is always public — Scalar UI fetches it via JS (no Basic Auth credentials).
+	mux.Handle("GET /docs/openapi.yaml", spec)
+
 	if protect != nil {
-		mux.Handle("GET /docs/openapi.yaml", protect(spec))
 		mux.Handle("GET /docs", protect(ui))
 	} else {
-		mux.HandleFunc("GET /docs/openapi.yaml", handleOpenAPISpec)
 		mux.HandleFunc("GET /docs", handleDocsUI)
 	}
 }
