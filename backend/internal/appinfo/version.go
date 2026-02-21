@@ -1,4 +1,4 @@
 package appinfo
 
 // Version is the application version, updated by bump-my-version.
-var Version = "0.1.0"
+var Version = "0.1.1"
