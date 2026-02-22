@@ -29,7 +29,6 @@ jobs:
           provenance: false
           tags: ghcr.io/${{ github.repository }}/secretdrop-frontend:latest
           build-args: |
-            VITE_ENABLE_GOOGLE_SIGNIN=false
             VITE_API_BASE_URL=https://api.secretdrop.us
           cache-from: type=gha
           cache-to: type=gha,mode=max
