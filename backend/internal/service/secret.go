@@ -9,6 +9,7 @@ import (
 	"net/mail"
 	"time"
 
+	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
@@ -390,7 +391,9 @@ func buildNotificationEmail(senderName, link string, expiresAt time.Time) string
 		"The decryption key exists only in the link above " +
 		"and is never stored on our servers. " +
 		`<a href="https://secretdrop.us" ` +
-		`style="color:#6b7280;">secretdrop.us</a></p>` +
+		`style="color:#6b7280;">secretdrop.us</a>` +
+		` <span style="color:#d1d5db;">v` +
+		appinfo.Version + "</span></p>" +
 		"</td></tr></table>" +
 		"</td></tr></table>" +
 		"</body></html>"
