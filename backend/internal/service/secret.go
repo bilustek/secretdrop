@@ -9,12 +9,12 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/crypt"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
 
+	"github.com/bilustek/secretdropvault"
 	"github.com/google/uuid"
 )
 
@@ -172,7 +172,7 @@ func (s *SecretService) Reveal(
 	token string,
 	req *model.RevealRequest,
 ) (*model.RevealResponse, error) {
-	recipientHash := crypt.HashEmail(req.Email)
+	recipientHash := secretdropvault.HashEmail(req.Email)
 
 	secret, err := s.repo.FindByTokenAndHash(ctx, token, recipientHash)
 	if err != nil {
@@ -200,7 +200,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	randomKey, err := crypt.DecodeKey(req.Key)
+	randomKey, err := secretdropvault.DecodeKey(req.Key)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Invalid key",
@@ -208,7 +208,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	finalKey, err := crypt.DeriveKey(randomKey, req.Email)
+	finalKey, err := secretdropvault.DeriveKey(randomKey, req.Email)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Key derivation failed",
@@ -216,7 +216,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	plaintext, err := crypt.Decrypt(finalKey, secret.EncryptedBlob, secret.Nonce)
+	plaintext, err := secretdropvault.Decrypt(finalKey, secret.EncryptedBlob, secret.Nonce)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Decryption failed",
@@ -236,22 +236,22 @@ func (s *SecretService) createForRecipient(
 	text, recipientEmail string,
 	expiresAt time.Time,
 ) (*model.RecipientLink, error) {
-	randomKey, err := crypt.GenerateRandomKey()
+	randomKey, err := secretdropvault.GenerateRandomKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate random key: %w", err)
 	}
 
-	finalKey, err := crypt.DeriveKey(randomKey, recipientEmail)
+	finalKey, err := secretdropvault.DeriveKey(randomKey, recipientEmail)
 	if err != nil {
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
-	ciphertext, nonce, err := crypt.Encrypt(finalKey, []byte(text))
+	ciphertext, nonce, err := secretdropvault.Encrypt(finalKey, []byte(text))
 	if err != nil {
 		return nil, fmt.Errorf("encrypt: %w", err)
 	}
 
-	token, err := crypt.GenerateToken()
+	token, err := secretdropvault.GenerateToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
@@ -260,7 +260,7 @@ func (s *SecretService) createForRecipient(
 		Token:         token,
 		EncryptedBlob: ciphertext,
 		Nonce:         nonce,
-		RecipientHash: crypt.HashEmail(recipientEmail),
+		RecipientHash: secretdropvault.HashEmail(recipientEmail),
 		ExpiresAt:     expiresAt,
 	}
 
@@ -268,7 +268,7 @@ func (s *SecretService) createForRecipient(
 		return nil, fmt.Errorf("store secret: %w", err)
 	}
 
-	encodedKey := crypt.EncodeKey(randomKey)
+	encodedKey := secretdropvault.EncodeKey(randomKey)
 	link := fmt.Sprintf("%s/s/%s#%s", s.baseURL, token, encodedKey)
 
 	subject := "You've received a secret via SecretDrop"
