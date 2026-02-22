@@ -9,7 +9,7 @@ import (
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 )
 
-const contactRecipient = "support@bilusteknoloji.com"
+const contactRecipient = "support@bilustek.com"
 
 type contactRequest struct {
 	Name    string `json:"name"`
