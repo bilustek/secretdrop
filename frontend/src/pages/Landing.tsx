@@ -162,7 +162,7 @@ export default function Landing() {
             </div>
             <h3 className="font-semibold mb-2">Share via Email</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Recipients get a one-time link. Only the intended recipient can decrypt.
+              Recipients get a one-time link and must verify their email before the secret is revealed. Only the intended recipient can decrypt.
             </p>
           </div>
           <div className="text-center p-6">
@@ -244,12 +244,13 @@ export default function Landing() {
           </div>
 
           <div className="mt-14 text-center border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 mb-3">
-              <GitHubIcon className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 mb-3">
+              <GitHubIcon className="w-8 h-8 text-gray-700 dark:text-gray-300" />
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed max-w-lg mx-auto">
-              Don't just take our word for it. SecretDrop will be released as <span className="font-medium text-gray-900 dark:text-white">open source under the MIT license</span> soon
-              — so you can audit every line of code yourself.
+              Don't just take our word for it. Our encryption engine is{" "}
+              <a href="https://github.com/bilustek/secretdropvault" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 dark:text-white underline underline-offset-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">open source under the MIT license</a>
+              {" "}&mdash; audit every line of code yourself.
             </p>
           </div>
         </div>
