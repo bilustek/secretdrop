@@ -17,7 +17,8 @@ var _ email.Sender = (*Sender)(nil)
 // Sender logs emails to the console in RFC 2822-like format (similar to
 // Django's console email backend) instead of actually sending them.
 type Sender struct {
-	from string
+	from    string
+	replyTo string
 }
 
 // Option configures a Sender value.
@@ -27,6 +28,13 @@ type Option func(*Sender)
 func WithFrom(from string) Option {
 	return func(s *Sender) {
 		s.from = from
+	}
+}
+
+// WithReplyTo sets the Reply-To address shown in the output.
+func WithReplyTo(replyTo string) Option {
+	return func(s *Sender) {
+		s.replyTo = replyTo
 	}
 }
 
@@ -47,13 +55,18 @@ func New(opts ...Option) *Sender {
 func (s *Sender) Send(_ context.Context, to, subject, body string) error {
 	hostname, _ := os.Hostname()
 
+	replyToLine := ""
+	if s.replyTo != "" {
+		replyToLine = fmt.Sprintf("Reply-To: %s\n", s.replyTo)
+	}
+
 	msg := fmt.Sprintf(`%s
 Content-Type: text/html; charset="utf-8"
 MIME-Version: 1.0
 Subject: %s
 From: %s
 To: %s
-Date: %s
+%sDate: %s
 Message-ID: <%d@%s>
 
 %s
@@ -62,6 +75,7 @@ Message-ID: <%d@%s>
 		subject,
 		s.from,
 		to,
+		replyToLine,
 		time.Now().Format(time.RFC1123Z),
 		time.Now().UnixNano(),
 		hostname,

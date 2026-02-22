@@ -138,7 +138,7 @@ func Run() error {
 
 	var sender email.Sender
 	if cfg.IsDev() {
-		sender = console.New(console.WithFrom(cfg.FromEmail()))
+		sender = console.New(console.WithFrom(cfg.FromEmail()), console.WithReplyTo(cfg.ReplyToEmail()))
 		slog.Info("development mode: emails will be printed to stderr")
 	} else {
 		sender, err = resend.New(
