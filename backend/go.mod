@@ -3,6 +3,7 @@ module github.com/bilusteknoloji/secretdrop
 go 1.26.0
 
 require (
+	github.com/bilustek/secretdropvault v0.1.0
 	github.com/getsentry/sentry-go v0.42.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0

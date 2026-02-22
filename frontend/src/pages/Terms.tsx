@@ -102,7 +102,7 @@ export default function Terms() {
       <h2>12. Contact</h2>
       <p>
         Questions about these terms may be directed to{" "}
-        <a href="mailto:support@bilusteknoloji.com">support@bilusteknoloji.com</a>.
+        <a href="mailto:support@bilustek.com">support@bilustek.com</a>.
       </p>
     </StaticPage>
   )

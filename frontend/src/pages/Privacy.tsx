@@ -81,7 +81,7 @@ export default function Privacy() {
       <h2>10. Contact</h2>
       <p>
         For privacy-related inquiries, contact us at{" "}
-        <a href="mailto:support@bilusteknoloji.com">support@bilusteknoloji.com</a>.
+        <a href="mailto:support@bilustek.com">support@bilustek.com</a>.
       </p>
     </StaticPage>
   )

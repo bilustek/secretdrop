@@ -9,12 +9,12 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/crypt"
 	"github.com/bilusteknoloji/secretdrop/internal/email"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
 	"github.com/bilusteknoloji/secretdrop/internal/repository"
 	"github.com/bilusteknoloji/secretdrop/internal/user"
 
+	"github.com/bilustek/secretdropvault"
 	"github.com/google/uuid"
 )
 
@@ -143,8 +143,15 @@ func (s *SecretService) Create(
 	expiresAt := time.Now().Add(s.expiry).UTC()
 	recipients := make([]model.RecipientLink, 0, len(req.To))
 
+	var senderName string
+	if s.userRepo != nil {
+		if u, err := s.userRepo.FindByID(ctx, userID); err == nil {
+			senderName = u.Name
+		}
+	}
+
 	for _, recipientEmail := range req.To {
-		link, err := s.createForRecipient(ctx, req.Text, recipientEmail, expiresAt)
+		link, err := s.createForRecipient(ctx, req.Text, recipientEmail, expiresAt, senderName)
 		if err != nil {
 			return nil, fmt.Errorf("create secret for %s: %w", recipientEmail, err)
 		}
@@ -172,7 +179,7 @@ func (s *SecretService) Reveal(
 	token string,
 	req *model.RevealRequest,
 ) (*model.RevealResponse, error) {
-	recipientHash := crypt.HashEmail(req.Email)
+	recipientHash := secretdropvault.HashEmail(req.Email)
 
 	secret, err := s.repo.FindByTokenAndHash(ctx, token, recipientHash)
 	if err != nil {
@@ -200,7 +207,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	randomKey, err := crypt.DecodeKey(req.Key)
+	randomKey, err := secretdropvault.DecodeKey(req.Key)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Invalid key",
@@ -208,7 +215,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	finalKey, err := crypt.DeriveKey(randomKey, req.Email)
+	finalKey, err := secretdropvault.DeriveKey(randomKey, req.Email)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Key derivation failed",
@@ -216,7 +223,7 @@ func (s *SecretService) Reveal(
 		}
 	}
 
-	plaintext, err := crypt.Decrypt(finalKey, secret.EncryptedBlob, secret.Nonce)
+	plaintext, err := secretdropvault.Decrypt(finalKey, secret.EncryptedBlob, secret.Nonce)
 	if err != nil {
 		return nil, &model.AppError{
 			Type: "decrypt_failed", Message: "Decryption failed",
@@ -235,23 +242,24 @@ func (s *SecretService) createForRecipient(
 	ctx context.Context,
 	text, recipientEmail string,
 	expiresAt time.Time,
+	senderName string,
 ) (*model.RecipientLink, error) {
-	randomKey, err := crypt.GenerateRandomKey()
+	randomKey, err := secretdropvault.GenerateRandomKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate random key: %w", err)
 	}
 
-	finalKey, err := crypt.DeriveKey(randomKey, recipientEmail)
+	finalKey, err := secretdropvault.DeriveKey(randomKey, recipientEmail)
 	if err != nil {
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
-	ciphertext, nonce, err := crypt.Encrypt(finalKey, []byte(text))
+	ciphertext, nonce, err := secretdropvault.Encrypt(finalKey, []byte(text))
 	if err != nil {
 		return nil, fmt.Errorf("encrypt: %w", err)
 	}
 
-	token, err := crypt.GenerateToken()
+	token, err := secretdropvault.GenerateToken()
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
@@ -260,7 +268,7 @@ func (s *SecretService) createForRecipient(
 		Token:         token,
 		EncryptedBlob: ciphertext,
 		Nonce:         nonce,
-		RecipientHash: crypt.HashEmail(recipientEmail),
+		RecipientHash: secretdropvault.HashEmail(recipientEmail),
 		ExpiresAt:     expiresAt,
 	}
 
@@ -268,13 +276,16 @@ func (s *SecretService) createForRecipient(
 		return nil, fmt.Errorf("store secret: %w", err)
 	}
 
-	encodedKey := crypt.EncodeKey(randomKey)
+	encodedKey := secretdropvault.EncodeKey(randomKey)
 	link := fmt.Sprintf("%s/s/%s#%s", s.baseURL, token, encodedKey)
 
-	subject := "You've received a secret via SecretDrop"
-	html := "<p>Someone shared a secret with you.</p>" +
-		`<p><a href="` + link + `">Click here to reveal it</a></p>` +
-		"<p>This link will expire and can only be used once.</p>"
+	fromLine := "A SecretDrop user"
+	if senderName != "" {
+		fromLine = senderName
+	}
+
+	subject := fromLine + " sent you a secure message — SecretDrop"
+	html := buildNotificationEmail(fromLine, link, expiresAt)
 
 	if err := s.sender.Send(ctx, recipientEmail, subject, html); err != nil {
 		return nil, fmt.Errorf("send email: %w", err)
@@ -330,4 +341,57 @@ func validateCreateRequest(req *model.CreateRequest, maxRecipients, maxTextLengt
 	}
 
 	return nil
+}
+
+func buildNotificationEmail(senderName, link string, expiresAt time.Time) string {
+	expiry := expiresAt.Format("Jan 2, 2006 at 3:04 PM UTC")
+
+	return "<!DOCTYPE html>" +
+		`<html lang="en">` +
+		"<head><meta charset=\"UTF-8\"></head>" +
+		`<body style="margin:0;padding:0;background-color:#f9fafb;` +
+		`font-family:-apple-system,BlinkMacSystemFont,` +
+		`'Segoe UI',Roboto,sans-serif;">` +
+		`<table width="100%" cellpadding="0" cellspacing="0" ` +
+		`style="background-color:#f9fafb;padding:40px 0;">` +
+		"<tr><td align=\"center\">" +
+		`<table width="560" cellpadding="0" cellspacing="0" ` +
+		`style="background-color:#ffffff;border-radius:8px;` +
+		`border:1px solid #e5e7eb;padding:40px;">` +
+		"<tr><td>" +
+		`<h1 style="font-size:20px;font-weight:600;` +
+		`color:#111827;margin:0 0 16px;">` +
+		"You have a secure message</h1>" +
+		`<p style="font-size:15px;color:#374151;` +
+		`line-height:1.6;margin:0 0 8px;">` +
+		"<strong>" + senderName + "</strong> " +
+		"shared a secure message with you via SecretDrop.</p>" +
+		`<p style="font-size:14px;color:#6b7280;` +
+		`line-height:1.6;margin:0 0 24px;">` +
+		"This message can only be viewed once and expires on " +
+		expiry + ".</p>" +
+		`<table cellpadding="0" cellspacing="0" ` +
+		`style="margin:0 0 24px;">` +
+		`<tr><td style="background-color:#4f46e5;` +
+		`border-radius:6px;padding:12px 24px;">` +
+		`<a href="` + link + `" style="color:#ffffff;` +
+		`text-decoration:none;font-size:15px;font-weight:500;">` +
+		"View Secure Message</a>" +
+		"</td></tr></table>" +
+		`<p style="font-size:13px;color:#9ca3af;` +
+		`line-height:1.5;margin:0 0 4px;">` +
+		"You will need to verify your email address " +
+		"before the message is revealed.</p>" +
+		`<hr style="border:none;border-top:1px solid #e5e7eb;` +
+		`margin:24px 0;">` +
+		`<p style="font-size:12px;color:#9ca3af;` +
+		`line-height:1.5;margin:0;">` +
+		"SecretDrop encrypts messages with AES-256-GCM. " +
+		"The decryption key exists only in the link above " +
+		"and is never stored on our servers. " +
+		`<a href="https://secretdrop.us" ` +
+		`style="color:#6b7280;">secretdrop.us</a></p>` +
+		"</td></tr></table>" +
+		"</td></tr></table>" +
+		"</body></html>"
 }
