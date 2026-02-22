@@ -34,7 +34,6 @@ secretdrop/
 │       ├── billing/           # Stripe checkout, portal, webhooks
 │       ├── cleanup/           # Ticker-based expired secret deletion
 │       ├── config/            # Config with functional options (env vars)
-│       ├── crypt/             # HKDF + AES-256-GCM encrypt/decrypt
 │       ├── email/             # Sender interface
 │       │   ├── resend/        # Resend API implementation
 │       │   ├── console/       # Console logger (development)
@@ -100,7 +99,8 @@ secretdrop/
 | `DATABASE_URL` | No | `file:db/secretdrop.db?_journal_mode=WAL` |
 | `API_BASE_URL` | No | `http://localhost:8080` |
 | `FRONTEND_BASE_URL` | No | `http://localhost:3000` |
-| `FROM_EMAIL` | No | `SecretDrop <noreply@secretdrop.us>` |
+| `FROM_EMAIL` | No | `SecretDrop <hello@secretdrop.us>` |
+| `REPLY_TO_EMAIL` | No | `support@bilustek.com` |
 | `SECRET_EXPIRY` | No | `10m` |
 | `CLEANUP_INTERVAL` | No | `1m` |
 | `GOOGLE_CLIENT_ID` | Yes (prod only) | — |

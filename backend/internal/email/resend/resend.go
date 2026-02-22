@@ -15,8 +15,9 @@ var _ email.Sender = (*Sender)(nil)
 
 // Sender sends emails via the Resend API.
 type Sender struct {
-	client *resendapi.Client
-	from   string
+	client  *resendapi.Client
+	from    string
+	replyTo string
 }
 
 // Option configures a Sender value.
@@ -30,6 +31,19 @@ func WithFrom(from string) Option {
 		}
 
 		s.from = from
+
+		return nil
+	}
+}
+
+// WithReplyTo sets the Reply-To address for outgoing emails.
+func WithReplyTo(replyTo string) Option {
+	return func(s *Sender) error {
+		if replyTo == "" {
+			return errors.New("reply-to email cannot be empty")
+		}
+
+		s.replyTo = replyTo
 
 		return nil
 	}
@@ -61,6 +75,7 @@ func (s *Sender) Send(_ context.Context, to, subject, html string) error {
 		To:      []string{to},
 		Subject: subject,
 		Html:    html,
+		ReplyTo: s.replyTo,
 	}
 
 	_, err := s.client.Emails.Send(params)

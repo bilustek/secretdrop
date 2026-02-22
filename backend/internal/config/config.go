@@ -13,7 +13,8 @@ const (
 	defaultDatabaseURL            = "file:db/secretdrop.db?_journal_mode=WAL"
 	defaultAPIBaseURL             = "http://localhost:8080"
 	defaultFrontendBaseURL        = "http://localhost:3000"
-	defaultFromEmail              = "SecretDrop <noreply@secretdrop.us>"
+	defaultFromEmail              = "SecretDrop <hello@secretdrop.us>"
+	defaultReplyToEmail           = "support@bilustek.com"
 	defaultSecretExpiry           = 10 * time.Minute
 	defaultCleanupInterval        = 1 * time.Minute
 	defaultEnv                    = "production"
@@ -29,6 +30,7 @@ type Config struct {
 	apiBaseURL      string
 	frontendBaseURL string
 	fromEmail       string
+	replyToEmail    string
 	secretExpiry    time.Duration
 	cleanupInterval time.Duration
 
@@ -214,6 +216,9 @@ func (c *Config) FrontendBaseURL() string { return c.frontendBaseURL }
 // FromEmail returns the sender email address.
 func (c *Config) FromEmail() string { return c.fromEmail }
 
+// ReplyToEmail returns the Reply-To email address.
+func (c *Config) ReplyToEmail() string { return c.replyToEmail }
+
 // SecretExpiry returns the secret expiration duration.
 func (c *Config) SecretExpiry() time.Duration { return c.secretExpiry }
 
@@ -275,6 +280,7 @@ func Load(opts ...Option) (*Config, error) {
 		apiBaseURL:      envOrDefault("API_BASE_URL", defaultAPIBaseURL),
 		frontendBaseURL: envOrDefault("FRONTEND_BASE_URL", defaultFrontendBaseURL),
 		fromEmail:       envOrDefault("FROM_EMAIL", defaultFromEmail),
+		replyToEmail:    envOrDefault("REPLY_TO_EMAIL", defaultReplyToEmail),
 		secretExpiry:    defaultSecretExpiry,
 		cleanupInterval: defaultCleanupInterval,
 	}

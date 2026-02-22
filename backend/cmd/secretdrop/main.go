@@ -141,7 +141,11 @@ func Run() error {
 		sender = console.New(console.WithFrom(cfg.FromEmail()))
 		slog.Info("development mode: emails will be printed to stderr")
 	} else {
-		sender, err = resend.New(cfg.ResendAPIKey(), resend.WithFrom(cfg.FromEmail()))
+		sender, err = resend.New(
+			cfg.ResendAPIKey(),
+			resend.WithFrom(cfg.FromEmail()),
+			resend.WithReplyTo(cfg.ReplyToEmail()),
+		)
 		if err != nil {
 			return fmt.Errorf("create email sender: %w", err)
 		}

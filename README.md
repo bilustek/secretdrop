@@ -56,7 +56,8 @@ export PORT=8080                         # server port
 export DATABASE_URL="file:db/secretdrop.db?_journal_mode=WAL"  # SQLite path
 export API_BASE_URL=http://localhost:8080      # backend URL (OAuth callbacks)
 export FRONTEND_BASE_URL=http://localhost:3000 # frontend URL (secret links, billing redirects)
-export FROM_EMAIL="SecretDrop <noreply@secretdrop.us>"     # sender address
+export FROM_EMAIL="SecretDrop <hello@secretdrop.us>"       # sender address
+export REPLY_TO_EMAIL="support@bilustek.com"               # reply-to address
 export SECRET_EXPIRY=10m                 # secret TTL
 export CLEANUP_INTERVAL=1m              # expired record cleanup frequency
 
@@ -303,7 +304,6 @@ secretdrop/
 │       ├── billing/            # Stripe checkout, portal, webhooks
 │       ├── cleanup/            # Expired record cleanup worker
 │       ├── config/             # Env vars → Config struct
-│       ├── crypt/              # AES-256-GCM + HKDF encryption
 │       ├── email/              # Resend email delivery
 │       ├── handler/            # HTTP handlers + docs
 │       ├── middleware/         # Request ID, logging, auth, content-type, CORS

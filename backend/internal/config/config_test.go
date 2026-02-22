@@ -12,7 +12,7 @@ func clearAllEnvVars(t *testing.T) {
 
 	for _, key := range []string{
 		"GOLANG_ENV", "PORT", "DATABASE_URL", "RESEND_API_KEY",
-		"API_BASE_URL", "FRONTEND_BASE_URL", "FROM_EMAIL",
+		"API_BASE_URL", "FRONTEND_BASE_URL", "FROM_EMAIL", "REPLY_TO_EMAIL",
 		"SECRET_EXPIRY", "CLEANUP_INTERVAL",
 		"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
 		"GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET",
@@ -55,8 +55,12 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("FrontendBaseURL() = %q; want default", cfg.FrontendBaseURL())
 	}
 
-	if cfg.FromEmail() != "SecretDrop <noreply@secretdrop.us>" {
+	if cfg.FromEmail() != "SecretDrop <hello@secretdrop.us>" {
 		t.Errorf("FromEmail() = %q; want default", cfg.FromEmail())
+	}
+
+	if cfg.ReplyToEmail() != "support@bilustek.com" {
+		t.Errorf("ReplyToEmail() = %q; want default", cfg.ReplyToEmail())
 	}
 
 	if cfg.SecretExpiry() != 10*time.Minute {
@@ -108,6 +112,7 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 	t.Setenv("API_BASE_URL", "https://api.example.com")
 	t.Setenv("FRONTEND_BASE_URL", "https://example.com")
 	t.Setenv("FROM_EMAIL", "test@example.com")
+	t.Setenv("REPLY_TO_EMAIL", "reply@example.com")
 	t.Setenv("SECRET_EXPIRY", "30m")
 	t.Setenv("CLEANUP_INTERVAL", "5m")
 	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
@@ -146,6 +151,10 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 
 	if cfg.FromEmail() != "test@example.com" {
 		t.Errorf("FromEmail() = %q; want %q", cfg.FromEmail(), "test@example.com")
+	}
+
+	if cfg.ReplyToEmail() != "reply@example.com" {
+		t.Errorf("ReplyToEmail() = %q; want %q", cfg.ReplyToEmail(), "reply@example.com")
 	}
 
 	if cfg.SecretExpiry() != 30*time.Minute {
