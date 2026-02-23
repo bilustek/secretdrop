@@ -393,6 +393,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/apple:
+    get:
+      operationId: appleLogin
+      summary: Apple OAuth login redirect
+      description: Redirects the user to Apple's Sign In page for authentication.
+      tags:
+        - Auth
+      responses:
+        "307":
+          description: Redirect to Apple Sign In
+
+  /auth/apple/callback:
+    post:
+      operationId: appleCallback
+      summary: Apple OAuth callback
+      description: >-
+        Handles the POST callback from Apple after user consent.
+        Exchanges the authorization code for tokens, verifies the ID token,
+        upserts the user, and redirects to the frontend with JWT tokens.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                state:
+                  type: string
+                user:
+                  type: string
+                  description: JSON string with user info (first login only)
+              required:
+                - code
+                - state
+      responses:
+        "307":
+          description: Redirect to frontend with tokens
+        "403":
+          description: Invalid OAuth state
+
   /auth/token:
     post:
       operationId: authTokenExchange

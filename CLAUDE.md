@@ -76,6 +76,8 @@ secretdrop/
 - `GET /auth/google/callback` — Google OAuth callback
 - `GET /auth/github` — GitHub OAuth login redirect
 - `GET /auth/github/callback` — GitHub OAuth callback
+- `GET /auth/apple` — Apple OAuth login redirect
+- `POST /auth/apple/callback` — Apple OAuth callback (form POST)
 - `POST /auth/token` — Mobile token exchange
 - `POST /auth/refresh` — Refresh access token (returns rotated pair)
 - `POST /billing/checkout` — Stripe checkout session (auth required)
@@ -118,7 +120,12 @@ secretdrop/
 | `ADMIN_PASSWORD` | No | — |
 | `SENTRY_DSN` | No | — |
 | `SENTRY_TRACES_SAMPLE_RATE` | No | `1.0` |
+| `APPLE_CLIENT_ID` | No | — |
+| `APPLE_TEAM_ID` | No | — |
+| `APPLE_KEY_ID` | No | — |
+| `APPLE_PRIVATE_KEY` | No | — |
 | `VITE_API_BASE_URL` | No (frontend) | `""` (same origin) |
+| `VITE_ENABLE_APPLE_SIGNIN` | No (frontend) | `""` (enabled by default) |
 
 ## Frontend Routes
 
