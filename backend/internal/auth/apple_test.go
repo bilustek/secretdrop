@@ -11,12 +11,15 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
 )
 
 // generateTestP8Key creates a base64-encoded ECDSA P-256 private key in PEM format for testing.
@@ -273,5 +276,156 @@ func TestVerifyAppleIDToken_WrongAudience(t *testing.T) { //nolint:paralleltest 
 	_, err = auth.VerifyAppleIDToken(context.Background(), idToken, "com.bilustek.secretdrop.web", jwksServer.URL)
 	if err == nil {
 		t.Fatal("VerifyAppleIDToken() should fail with wrong audience")
+	}
+}
+
+func TestAppleConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := auth.AppleConfig("com.bilustek.secretdrop.web", "http://localhost/callback")
+
+	if cfg.ClientID != "com.bilustek.secretdrop.web" {
+		t.Errorf("ClientID = %q; want %q", cfg.ClientID, "com.bilustek.secretdrop.web")
+	}
+
+	if cfg.RedirectURL != "http://localhost/callback" {
+		t.Errorf("RedirectURL = %q; want %q", cfg.RedirectURL, "http://localhost/callback")
+	}
+
+	if len(cfg.Scopes) != 2 {
+		t.Fatalf("Scopes length = %d; want 2", len(cfg.Scopes))
+	}
+
+	wantScopes := []string{"name", "email"}
+	for i, s := range wantScopes {
+		if cfg.Scopes[i] != s {
+			t.Errorf("Scopes[%d] = %q; want %q", i, cfg.Scopes[i], s)
+		}
+	}
+}
+
+func TestHandleAppleLogin_Redirect(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	cfg := auth.AppleConfig("com.bilustek.secretdrop.web", "http://localhost/callback")
+	handler := svc.HandleAppleLogin(cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/apple", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("Location header is empty")
+	}
+
+	if !containsSubstring(location, "appleid.apple.com") {
+		t.Errorf("Location = %q; want to contain %q", location, "appleid.apple.com")
+	}
+
+	if !containsSubstring(location, "response_mode=form_post") {
+		t.Errorf("Location = %q; want to contain response_mode=form_post", location)
+	}
+
+	// Verify oauth_state cookie
+	cookies := rec.Result().Cookies()
+
+	var stateCookie *http.Cookie
+
+	for _, c := range cookies {
+		if c.Name == "oauth_state" {
+			stateCookie = c
+
+			break
+		}
+	}
+
+	if stateCookie == nil {
+		t.Fatal("oauth_state cookie not set")
+	}
+}
+
+func TestHandleAppleCallback_InvalidState(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	cfg := auth.AppleConfig("com.bilustek.secretdrop.web", "http://localhost/callback")
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	handler := svc.HandleAppleCallback(cfg, userRepo)
+
+	// POST form with mismatched state
+	form := url.Values{}
+	form.Set("code", "test-code")
+	form.Set("state", "correct-state")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/apple/callback", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "wrong-state"})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusForbidden)
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_state" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_state")
+	}
+}
+
+func TestHandleAppleCallback_MissingStateCookie(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	cfg := auth.AppleConfig("com.bilustek.secretdrop.web", "http://localhost/callback")
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	handler := svc.HandleAppleCallback(cfg, userRepo)
+
+	form := url.Values{}
+	form.Set("code", "test-code")
+	form.Set("state", "some-state")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/apple/callback", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusForbidden)
 	}
 }
