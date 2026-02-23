@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/auth"
 	"github.com/bilusteknoloji/secretdrop/internal/model"
@@ -804,5 +805,259 @@ func TestHandleTokenExchange_Google_TransportError(
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+}
+
+func TestHandleRefresh_Success(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	// Create a user in the repo.
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider:   "google",
+		ProviderID: "refresh-test-123",
+		Email:      "refresh@example.com",
+		Name:       "Refresh User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	// Generate initial token pair.
+	originalPair, err := svc.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	// Sleep briefly so new tokens get a different iat (JWT uses second precision).
+	time.Sleep(1100 * time.Millisecond)
+
+	body := fmt.Sprintf(`{"refresh_token":%q}`, originalPair.RefreshToken)
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 200
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	// Verify: new token pair returned
+	var newPair auth.TokenPair
+	if err := json.NewDecoder(rec.Body).Decode(&newPair); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if newPair.AccessToken == "" {
+		t.Error("access_token is empty")
+	}
+
+	if newPair.RefreshToken == "" {
+		t.Error("refresh_token is empty")
+	}
+
+	// Verify: tokens are rotated (different from original)
+	if newPair.AccessToken == originalPair.AccessToken {
+		t.Error("new access_token should differ from original (rotation)")
+	}
+
+	if newPair.RefreshToken == originalPair.RefreshToken {
+		t.Error("new refresh_token should differ from original (rotation)")
+	}
+}
+
+func TestHandleRefresh_InvalidToken(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	body := `{"refresh_token":"invalid-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 401
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_refresh_token" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_refresh_token")
+	}
+}
+
+func TestHandleRefresh_MissingBody(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 400
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "validation_error" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "validation_error")
+	}
+
+	wantMsg := "refresh_token is required"
+	if resp.Error.Message != wantMsg {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, wantMsg)
+	}
+}
+
+func TestHandleRefresh_DeletedUser(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	// Create a user, generate tokens, then delete user.
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider:   "google",
+		ProviderID: "deleted-user-123",
+		Email:      "deleted@example.com",
+		Name:       "Deleted User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	pair, err := svc.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	// Delete the user.
+	if err := userRepo.DeleteUser(context.Background(), u.ID); err != nil {
+		t.Fatalf("DeleteUser() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	body := fmt.Sprintf(`{"refresh_token":%q}`, pair.RefreshToken)
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 401
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_refresh_token" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_refresh_token")
+	}
+
+	wantMsg := "User not found"
+	if resp.Error.Message != wantMsg {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, wantMsg)
+	}
+}
+
+func TestHandleRefresh_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader("not-json"))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 400
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "validation_error" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "validation_error")
+	}
+
+	wantMsg := "Invalid JSON body"
+	if resp.Error.Message != wantMsg {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, wantMsg)
 	}
 }
