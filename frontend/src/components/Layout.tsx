@@ -90,7 +90,7 @@ export function Layout() {
                         </p>
                         <p className="flex items-center gap-2 text-sm font-medium mt-1.5">
                           <User size={16} className="shrink-0 text-gray-500" />
-                          {auth.user.name}
+                          {auth.user.name || auth.user.email}
                         </p>
                       </div>
                       {auth.user.tier === "pro" && (
