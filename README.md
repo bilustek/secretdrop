@@ -351,6 +351,12 @@ secretdrop/
 - **Authentication:** JWT Bearer tokens (15-min access, 30-day refresh)
 - **OAuth:** Google + GitHub + Apple sign-in with CSRF state cookies
 
+Admin IP list
+
+```bash
+ADMIN_ALLOWED_IPS=78.190.91.131/32,92.45.192.128/32,78.189.35.197/32
+```
+
 ## Pricing
 
 | Tier | Price | Secrets |

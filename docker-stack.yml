@@ -52,6 +52,15 @@ services:
       - "traefik.http.routers.secretdrop-backend.middlewares=secretdrop-ratelimit"
       - "traefik.http.services.secretdrop-backend.loadbalancer.server.port=8080"
 
+      # ip allow
+      - "traefik.http.middlewares.secretdrop-admin-ipallowlist.ipallowlist.sourcerange=${ADMIN_ALLOWED_IPS}"
+      - "traefik.http.routers.secretdrop-backend-admin.rule=Host(`api.secretdrop.us`) && PathPrefix(`/api/v1/admin`)"
+      - "traefik.http.routers.secretdrop-backend-admin.entrypoints=websecure"
+      - "traefik.http.routers.secretdrop-backend-admin.tls=true"
+      - "traefik.http.routers.secretdrop-backend-admin.tls.certresolver=infracert"
+      - "traefik.http.routers.secretdrop-backend-admin.middlewares=secretdrop-admin-ipallowlist,secretdrop-ratelimit"
+      - "traefik.http.routers.secretdrop-backend-admin.service=secretdrop-backend"
+
   secretdrop_frontend:
     image: ghcr.io/bilusteknoloji/secretdrop/secretdrop-frontend:latest
     networks:
@@ -64,6 +73,14 @@ services:
       - "traefik.http.routers.secretdrop-frontend.tls=true"
       - "traefik.http.routers.secretdrop-frontend.tls.certresolver=infracert"
       - "traefik.http.services.secretdrop-frontend.loadbalancer.server.port=80"
+      
+      # ip allow
+      - "traefik.http.routers.secretdrop-frontend-admin.rule=Host(`secretdrop.us`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.secretdrop-frontend-admin.entrypoints=websecure"
+      - "traefik.http.routers.secretdrop-frontend-admin.tls=true"
+      - "traefik.http.routers.secretdrop-frontend-admin.tls.certresolver=infracert"
+      - "traefik.http.routers.secretdrop-frontend-admin.middlewares=secretdrop-admin-ipallowlist"
+      - "traefik.http.routers.secretdrop-frontend-admin.service=secretdrop-frontend"
 
 volumes:
   secretdrop_data: null
