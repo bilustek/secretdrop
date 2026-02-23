@@ -37,6 +37,10 @@ type Service struct {
 	refreshExpiry   time.Duration
 	googleClientID  string
 	frontendBaseURL string
+	appleClientID   string
+	appleTeamID     string
+	appleKeyID      string
+	applePrivateKey string
 }
 
 // New creates a new auth Service.
@@ -99,6 +103,18 @@ func WithGoogleClientID(id string) Option {
 func WithFrontendBaseURL(url string) Option {
 	return func(s *Service) error {
 		s.frontendBaseURL = url
+
+		return nil
+	}
+}
+
+// WithAppleCredentials sets the Apple Sign-In credentials.
+func WithAppleCredentials(clientID, teamID, keyID, privateKey string) Option {
+	return func(s *Service) error {
+		s.appleClientID = clientID
+		s.appleTeamID = teamID
+		s.appleKeyID = keyID
+		s.applePrivateKey = privateKey
 
 		return nil
 	}

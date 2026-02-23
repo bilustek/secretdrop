@@ -25,6 +25,7 @@ deleted** from the database — no trace left.
 | Resend account | — | [resend.com](https://resend.com) → grab an API key |
 | Google OAuth app | — | [console.cloud.google.com](https://console.cloud.google.com) |
 | GitHub OAuth app | — | [github.com/settings/developers](https://github.com/settings/developers) |
+| Apple Developer account | — | [developer.apple.com](https://developer.apple.com) → Sign in with Apple |
 | Stripe account | — | [stripe.com](https://stripe.com) → grab API keys |
 | Sentry account | — (optional) | [sentry.io](https://sentry.io) → create a Go project |
 
@@ -80,12 +81,19 @@ export SLACK_WEBHOOK_NOTIFICATIONS="https://hooks.slack.com/services/xxx"
 export ADMIN_USERNAME=admin
 export ADMIN_PASSWORD=change-me-to-a-strong-password
 
+# Apple Sign-In (optional — enables Sign in with Apple)
+export APPLE_CLIENT_ID=com.bilustek.secretdrop.web
+export APPLE_TEAM_ID=XXXXXXXXXX
+export APPLE_KEY_ID=XXXXXXXXXX
+export APPLE_PRIVATE_KEY=base64-encoded-p8-private-key
+
 # Sentry (optional — error tracking and performance monitoring)
 export SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 export SENTRY_TRACES_SAMPLE_RATE=1.0
 
 # Frontend (build-time, passed as Docker build arg)
 # VITE_API_BASE_URL=https://api.secretdrop.us  # empty = same origin
+# VITE_ENABLE_APPLE_SIGNIN=false               # set "false" to hide Apple button
 ```
 
 ## API Documentation
@@ -106,6 +114,8 @@ Interactive API docs (Scalar UI) are available at [`/docs`](https://api.secretdr
 | `GET`  | `/auth/google/callback` | No | Google OAuth callback |
 | `GET`  | `/auth/github` | No | GitHub OAuth login redirect |
 | `GET`  | `/auth/github/callback` | No | GitHub OAuth callback |
+| `GET`  | `/auth/apple` | No | Apple OAuth login redirect |
+| `POST` | `/auth/apple/callback` | No | Apple OAuth callback (form POST) |
 | `POST` | `/auth/token` | No | Mobile token exchange |
 | `POST` | `/auth/refresh` | No | Refresh access token (rotated pair) |
 | `POST` | `/billing/checkout` | Bearer | Create Stripe checkout session |
@@ -131,7 +141,7 @@ Interactive API docs (Scalar UI) are available at [`/docs`](https://api.secretdr
 
 ### Authentication Flow
 
-1. User visits `/auth/google` or `/auth/github` to start OAuth
+1. User visits `/auth/google`, `/auth/github`, or `/auth/apple` to start OAuth
 2. After consent, the callback returns a JWT token pair (access + refresh)
 3. Use the access token in subsequent API requests:
 
@@ -301,7 +311,7 @@ secretdrop/
 │   │   └── openapi.yaml        # OpenAPI 3.1 spec
 │   └── internal/
 │       ├── appinfo/            # Version metadata
-│       ├── auth/               # OAuth flows (Google, GitHub) + JWT
+│       ├── auth/               # OAuth flows (Google, GitHub, Apple) + JWT
 │       ├── billing/            # Stripe checkout, portal, webhooks
 │       ├── cleanup/            # Expired record cleanup worker
 │       ├── config/             # Env vars → Config struct
@@ -334,7 +344,7 @@ secretdrop/
 - **One-time use:** record is permanently deleted from DB after reveal
 - **Auto-cleanup:** expired records are periodically purged
 - **Authentication:** JWT Bearer tokens (15-min access, 30-day refresh)
-- **OAuth:** Google + GitHub sign-in with CSRF state cookies
+- **OAuth:** Google + GitHub + Apple sign-in with CSRF state cookies
 
 ## Pricing
 

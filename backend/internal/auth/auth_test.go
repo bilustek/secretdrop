@@ -374,6 +374,24 @@ func TestVerifyToken_MalformedToken(t *testing.T) {
 	}
 }
 
+func TestNew_WithAppleCredentials(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret", auth.WithAppleCredentials(
+		"com.bilustek.secretdrop.web",
+		"ABCDE12345",
+		"KEY123",
+		"base64-encoded-key",
+	))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc == nil {
+		t.Fatal("New() returned nil service")
+	}
+}
+
 func TestNew_WithGoogleClientID(t *testing.T) {
 	t.Parallel()
 
