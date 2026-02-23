@@ -77,6 +77,7 @@ secretdrop/
 - `GET /auth/github` — GitHub OAuth login redirect
 - `GET /auth/github/callback` — GitHub OAuth callback
 - `POST /auth/token` — Mobile token exchange
+- `POST /auth/refresh` — Refresh access token (returns rotated pair)
 - `POST /billing/checkout` — Stripe checkout session (auth required)
 - `POST /billing/portal` — Stripe customer portal (auth required)
 - `POST /billing/webhook` — Stripe webhook handler
