@@ -178,8 +178,7 @@ export const api = {
     }),
 
   logout: () =>
-    fetch(`${API_URL}/auth/logout`, {
+    authenticatedFetch(`${API_URL}/auth/logout`, {
       method: "POST",
-      credentials: "include",
     }),
 }

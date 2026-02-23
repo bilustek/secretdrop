@@ -258,7 +258,7 @@ func Run() error {
 	chain = middleware.RequireJSON(chain, "/auth/apple/callback", "/billing/webhook")
 	chain = middleware.CSRF(
 		"/billing/webhook", "/auth/apple/callback",
-		"/auth/token", "/auth/refresh", "/auth/logout",
+		"/auth/token", "/auth/refresh",
 	)(chain)
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
 	chain = middleware.SecurityHeaders()(chain)

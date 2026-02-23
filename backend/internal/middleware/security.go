@@ -8,6 +8,7 @@ const contentSecurityPolicy = "default-src 'self'; " +
 	"img-src 'self' https://*.googleusercontent.com https://*.gravatar.com https://avatars.githubusercontent.com; " +
 	"connect-src 'self'; " +
 	"font-src 'self'; " +
+	"object-src 'none'; " +
 	"frame-ancestors 'none'; " +
 	"form-action 'self' https://appleid.apple.com; " +
 	"base-uri 'self'"
