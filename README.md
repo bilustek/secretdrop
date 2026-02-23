@@ -145,6 +145,11 @@ Interactive API docs (Scalar UI) are available at [`/docs`](https://api.secretdr
 2. After consent, the callback returns a JWT token pair (access + refresh)
 3. Use the access token in subsequent API requests:
 
+> **Apple Sign-In notes:** Apple uses `response_mode=form_post` — the callback
+> receives a POST with `application/x-www-form-urlencoded` (not a GET redirect
+> like Google/GitHub). The server generates a short-lived ES256 client_secret JWT
+> per request and verifies the returned id_token via Apple's JWKS endpoint (RS256).
+
 ```bash
 # Get token via OAuth callback (browser flow) or mobile token exchange:
 curl -s -X POST http://localhost:8080/auth/token \

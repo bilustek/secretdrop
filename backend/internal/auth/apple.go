@@ -2,8 +2,7 @@ package auth
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
@@ -44,13 +43,13 @@ type appleJWKS struct {
 }
 
 // appleJWK represents a single key in Apple's JWKS response.
+// Apple uses RSA keys (RS256) for id_token signing.
 type appleJWK struct {
 	Kty string `json:"kty"`
 	Kid string `json:"kid"`
 	Alg string `json:"alg"`
-	Crv string `json:"crv"`
-	X   string `json:"x"`
-	Y   string `json:"y"`
+	N   string `json:"n"`
+	E   string `json:"e"`
 }
 
 // appleUserName holds the first and last name from Apple's user JSON.
@@ -132,7 +131,7 @@ func VerifyAppleIDToken(ctx context.Context, idToken, expectedAud, jwksURL strin
 	}
 
 	token, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
@@ -213,23 +212,25 @@ func fetchAppleJWKS(ctx context.Context, jwksURL string) (*appleJWKS, error) {
 	return &jwks, nil
 }
 
-func findApplePublicKey(jwks *appleJWKS, kid string) (*ecdsa.PublicKey, error) {
+func findApplePublicKey(jwks *appleJWKS, kid string) (*rsa.PublicKey, error) {
 	for _, key := range jwks.Keys {
-		if key.Kid == kid && key.Kty == "EC" && key.Crv == "P-256" {
-			xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
+		if key.Kid == kid && key.Kty == "RSA" {
+			nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
 			if err != nil {
-				return nil, fmt.Errorf("decode JWK x: %w", err)
+				return nil, fmt.Errorf("decode JWK n: %w", err)
 			}
 
-			yBytes, err := base64.RawURLEncoding.DecodeString(key.Y)
+			eBytes, err := base64.RawURLEncoding.DecodeString(key.E)
 			if err != nil {
-				return nil, fmt.Errorf("decode JWK y: %w", err)
+				return nil, fmt.Errorf("decode JWK e: %w", err)
 			}
 
-			return &ecdsa.PublicKey{
-				Curve: elliptic.P256(),
-				X:     new(big.Int).SetBytes(xBytes),
-				Y:     new(big.Int).SetBytes(yBytes),
+			// Convert e bytes to int (typically 65537)
+			eInt := new(big.Int).SetBytes(eBytes).Int64()
+
+			return &rsa.PublicKey{
+				N: new(big.Int).SetBytes(nBytes),
+				E: int(eInt),
 			}, nil
 		}
 	}

@@ -5,10 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -148,7 +150,7 @@ func TestGenerateAppleClientSecret_InvalidKey(t *testing.T) {
 }
 
 func TestVerifyAppleIDToken(t *testing.T) { //nolint:paralleltest // uses httptest server
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
@@ -156,27 +158,15 @@ func TestVerifyAppleIDToken(t *testing.T) { //nolint:paralleltest // uses httpte
 	// Create a mock JWKS endpoint
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		pubKey := privKey.PublicKey
-		xBytes := pubKey.X.Bytes()
-		yBytes := pubKey.Y.Bytes()
-
-		// Pad to 32 bytes for P-256
-		for len(xBytes) < 32 {
-			xBytes = append([]byte{0}, xBytes...)
-		}
-		for len(yBytes) < 32 {
-			yBytes = append([]byte{0}, yBytes...)
-		}
-
 		jwks := map[string]any{
 			"keys": []map[string]any{
 				{
-					"kty": "EC",
+					"kty": "RSA",
 					"kid": "test-kid",
 					"use": "sig",
-					"alg": "ES256",
-					"crv": "P-256",
-					"x":   base64.RawURLEncoding.EncodeToString(xBytes),
-					"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+					"alg": "RS256",
+					"n":   base64.RawURLEncoding.EncodeToString(pubKey.N.Bytes()),
+					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pubKey.E)).Bytes()),
 				},
 			},
 		}
@@ -197,7 +187,7 @@ func TestVerifyAppleIDToken(t *testing.T) { //nolint:paralleltest // uses httpte
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
 	idToken, err := token.SignedString(privKey)
@@ -220,33 +210,22 @@ func TestVerifyAppleIDToken(t *testing.T) { //nolint:paralleltest // uses httpte
 }
 
 func TestVerifyAppleIDToken_WrongAudience(t *testing.T) { //nolint:paralleltest // uses httptest server
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
 
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		pubKey := privKey.PublicKey
-		xBytes := pubKey.X.Bytes()
-		yBytes := pubKey.Y.Bytes()
-
-		for len(xBytes) < 32 {
-			xBytes = append([]byte{0}, xBytes...)
-		}
-		for len(yBytes) < 32 {
-			yBytes = append([]byte{0}, yBytes...)
-		}
-
 		jwks := map[string]any{
 			"keys": []map[string]any{
 				{
-					"kty": "EC",
+					"kty": "RSA",
 					"kid": "test-kid",
 					"use": "sig",
-					"alg": "ES256",
-					"crv": "P-256",
-					"x":   base64.RawURLEncoding.EncodeToString(xBytes),
-					"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+					"alg": "RS256",
+					"n":   base64.RawURLEncoding.EncodeToString(pubKey.N.Bytes()),
+					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pubKey.E)).Bytes()),
 				},
 			},
 		}
@@ -266,7 +245,7 @@ func TestVerifyAppleIDToken_WrongAudience(t *testing.T) { //nolint:paralleltest 
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
 	idToken, err := token.SignedString(privKey)
@@ -358,7 +337,8 @@ func TestHandleAppleLogin_Redirect(t *testing.T) {
 
 // appleCallbackTestEnv holds all fixtures for Apple callback handler tests.
 type appleCallbackTestEnv struct {
-	privKey    *ecdsa.PrivateKey
+	ecPrivKey  *ecdsa.PrivateKey // ECDSA key for client_secret (ES256)
+	rsaPrivKey *rsa.PrivateKey   // RSA key for id_token signing (RS256)
 	b64PEMKey  string
 	jwksJSON   []byte
 	clientID   string
@@ -372,33 +352,29 @@ type appleCallbackTestEnv struct {
 func newAppleCallbackTestEnv(t *testing.T) *appleCallbackTestEnv {
 	t.Helper()
 
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	// ECDSA key for client_secret generation (ES256)
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generate ecdsa key: %v", err)
 	}
 
-	// Build JWKS JSON from the public key
-	pubKey := privKey.PublicKey
-	xBytes := pubKey.X.Bytes()
-	yBytes := pubKey.Y.Bytes()
-
-	for len(xBytes) < 32 {
-		xBytes = append([]byte{0}, xBytes...)
-	}
-	for len(yBytes) < 32 {
-		yBytes = append([]byte{0}, yBytes...)
+	// RSA key for id_token signing (RS256)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
 	}
 
+	// Build JWKS JSON from the RSA public key
+	rsaPubKey := rsaKey.PublicKey
 	jwksJSON, err := json.Marshal(map[string]any{
 		"keys": []map[string]any{
 			{
-				"kty": "EC",
+				"kty": "RSA",
 				"kid": "test-kid",
 				"use": "sig",
-				"alg": "ES256",
-				"crv": "P-256",
-				"x":   base64.RawURLEncoding.EncodeToString(xBytes),
-				"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+				"alg": "RS256",
+				"n":   base64.RawURLEncoding.EncodeToString(rsaPubKey.N.Bytes()),
+				"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(rsaPubKey.E)).Bytes()),
 			},
 		},
 	})
@@ -406,8 +382,8 @@ func newAppleCallbackTestEnv(t *testing.T) *appleCallbackTestEnv {
 		t.Fatalf("marshal JWKS: %v", err)
 	}
 
-	// PEM-encode the private key for Apple client_secret generation
-	der, err := x509.MarshalPKCS8PrivateKey(privKey)
+	// PEM-encode the ECDSA key for Apple client_secret generation
+	der, err := x509.MarshalPKCS8PrivateKey(ecKey)
 	if err != nil {
 		t.Fatalf("marshal private key: %v", err)
 	}
@@ -437,18 +413,19 @@ func newAppleCallbackTestEnv(t *testing.T) *appleCallbackTestEnv {
 	}
 
 	return &appleCallbackTestEnv{
-		privKey:   privKey,
-		b64PEMKey: b64Key,
-		jwksJSON:  jwksJSON,
-		clientID:  clientID,
-		tokenURL:  tokenURL,
-		jwksURL:   jwksURL,
-		svc:       svc,
-		cfg:       cfg,
+		ecPrivKey:  ecKey,
+		rsaPrivKey: rsaKey,
+		b64PEMKey:  b64Key,
+		jwksJSON:   jwksJSON,
+		clientID:   clientID,
+		tokenURL:   tokenURL,
+		jwksURL:    jwksURL,
+		svc:        svc,
+		cfg:        cfg,
 	}
 }
 
-// signAppleIDToken creates a signed Apple ID token JWT for testing.
+// signAppleIDToken creates a signed Apple ID token JWT for testing (RS256).
 func (env *appleCallbackTestEnv) signAppleIDToken(t *testing.T) string {
 	t.Helper()
 
@@ -462,10 +439,10 @@ func (env *appleCallbackTestEnv) signAppleIDToken(t *testing.T) string {
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
-	idToken, err := token.SignedString(env.privKey)
+	idToken, err := token.SignedString(env.rsaPrivKey)
 	if err != nil {
 		t.Fatalf("sign id token: %v", err)
 	}
@@ -946,10 +923,10 @@ func TestHandleAppleCallback_JWKSFetchFailure(t *testing.T) { //nolint:parallelt
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
-	idToken, err := token.SignedString(env.privKey)
+	idToken, err := token.SignedString(env.rsaPrivKey)
 	if err != nil {
 		t.Fatalf("sign id token: %v", err)
 	}
@@ -1011,33 +988,22 @@ func TestVerifyAppleIDToken_JWKSFetchError(t *testing.T) { //nolint:paralleltest
 }
 
 func TestVerifyAppleIDToken_InvalidIssuer(t *testing.T) { //nolint:paralleltest // uses httptest server
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
 
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		pubKey := privKey.PublicKey
-		xBytes := pubKey.X.Bytes()
-		yBytes := pubKey.Y.Bytes()
-
-		for len(xBytes) < 32 {
-			xBytes = append([]byte{0}, xBytes...)
-		}
-		for len(yBytes) < 32 {
-			yBytes = append([]byte{0}, yBytes...)
-		}
-
 		jwks := map[string]any{
 			"keys": []map[string]any{
 				{
-					"kty": "EC",
+					"kty": "RSA",
 					"kid": "test-kid",
 					"use": "sig",
-					"alg": "ES256",
-					"crv": "P-256",
-					"x":   base64.RawURLEncoding.EncodeToString(xBytes),
-					"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+					"alg": "RS256",
+					"n":   base64.RawURLEncoding.EncodeToString(pubKey.N.Bytes()),
+					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pubKey.E)).Bytes()),
 				},
 			},
 		}
@@ -1057,7 +1023,7 @@ func TestVerifyAppleIDToken_InvalidIssuer(t *testing.T) { //nolint:paralleltest 
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
 	idToken, err := token.SignedString(privKey)
@@ -1072,23 +1038,23 @@ func TestVerifyAppleIDToken_InvalidIssuer(t *testing.T) { //nolint:paralleltest 
 }
 
 func TestVerifyAppleIDToken_NoMatchingKid(t *testing.T) { //nolint:paralleltest // uses httptest server
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
 
 	// JWKS with different kid
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pubKey := privKey.PublicKey
 		jwks := map[string]any{
 			"keys": []map[string]any{
 				{
-					"kty": "EC",
+					"kty": "RSA",
 					"kid": "different-kid",
 					"use": "sig",
-					"alg": "ES256",
-					"crv": "P-256",
-					"x":   base64.RawURLEncoding.EncodeToString(privKey.PublicKey.X.Bytes()),
-					"y":   base64.RawURLEncoding.EncodeToString(privKey.PublicKey.Y.Bytes()),
+					"alg": "RS256",
+					"n":   base64.RawURLEncoding.EncodeToString(pubKey.N.Bytes()),
+					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pubKey.E)).Bytes()),
 				},
 			},
 		}
@@ -1108,7 +1074,7 @@ func TestVerifyAppleIDToken_NoMatchingKid(t *testing.T) { //nolint:paralleltest 
 		"exp":   now.Add(10 * time.Minute).Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = "test-kid"
 
 	idToken, err := token.SignedString(privKey)
