@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/version-0.3.5-orange.svg)
+![Version](https://img.shields.io/badge/version-0.3.6-orange.svg)
 ![Go](https://img.shields.io/badge/go-1.26-00ADD8.svg?logo=go&logoColor=white)
 [![Run golangci-lint](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml)
 [![Run go tests](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml)
