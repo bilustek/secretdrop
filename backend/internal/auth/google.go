@@ -189,7 +189,9 @@ func (s *Service) redirectWithTokens(w http.ResponseWriter, r *http.Request, pai
 	q.Set("refresh_token", pair.RefreshToken)
 	u.RawQuery = q.Encode()
 
-	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
+	// 303 See Other ensures the browser always uses GET for the redirect,
+	// even when the original request was POST (e.g. Apple form_post callback).
+	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
 // writeJSON is a small helper for auth handlers (not exported, auth-package only).

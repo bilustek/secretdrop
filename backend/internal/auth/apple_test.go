@@ -528,8 +528,8 @@ func TestHandleAppleCallback_Success(t *testing.T) { //nolint:paralleltest // mo
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 
 	location := rec.Header().Get("Location")
@@ -600,8 +600,8 @@ func TestHandleAppleCallback_SuccessWithUserJSON(t *testing.T) { //nolint:parall
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 }
 
@@ -650,8 +650,8 @@ func TestHandleAppleCallback_SuccessWithFirstNameOnly(t *testing.T) { //nolint:p
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 }
 
@@ -904,8 +904,8 @@ func TestHandleAppleCallback_InvalidUserJSON(t *testing.T) { //nolint:parallelte
 	handler.ServeHTTP(rec, req)
 
 	// Should succeed — invalid user JSON is non-fatal (name just stays empty)
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 }
 

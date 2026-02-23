@@ -225,8 +225,8 @@ func TestHandleGoogleCallback_Success(t *testing.T) { //nolint:paralleltest // m
 	handler.ServeHTTP(rec, req)
 
 	// Verify: Response 307 redirect
-	if rec.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 
 	// Verify: Location header contains frontend callback with tokens
