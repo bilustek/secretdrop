@@ -244,7 +244,7 @@ func Run() error {
 	}
 
 	var chain http.Handler = mux
-	chain = middleware.RequireJSON(chain)
+	chain = middleware.RequireJSON(chain, "/auth/apple/callback")
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)

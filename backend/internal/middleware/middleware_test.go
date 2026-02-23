@@ -97,6 +97,42 @@ func TestRequireJSON_PatchWithoutJSON(t *testing.T) {
 	}
 }
 
+func TestRequireJSON_SkippedPath(t *testing.T) {
+	t.Parallel()
+
+	handler := middleware.RequireJSON(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), "/auth/apple/callback")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/apple/callback", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestRequireJSON_NonSkippedPathStillBlocked(t *testing.T) {
+	t.Parallel()
+
+	handler := middleware.RequireJSON(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), "/auth/apple/callback")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusUnsupportedMediaType)
+	}
+}
+
 // --- RequestID ---
 
 func TestRequestID_GeneratesWhenMissing(t *testing.T) {
