@@ -248,12 +248,15 @@ func (s *Service) HandleAppleLogin(cfg *oauth2.Config) http.HandlerFunc {
 			return
 		}
 
+		// SameSite=None is required because Apple's form_post callback is a
+		// cross-site POST from appleid.apple.com — Lax cookies are not sent
+		// on cross-site POST requests.
 		http.SetCookie(w, &http.Cookie{
 			Name:     oauthStateCookieName,
 			Value:    state,
 			MaxAge:   oauthStateCookieMaxAge,
 			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
+			SameSite: http.SameSiteNoneMode,
 			Secure:   true,
 			Path:     "/",
 		})
