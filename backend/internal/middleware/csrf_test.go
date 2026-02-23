@@ -159,6 +159,32 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 	}
 }
 
+func TestCSRF_ExemptPrefixMatch(t *testing.T) {
+	t.Parallel()
+
+	called := false
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.CSRF("/api/v1/secrets/")(inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets/abc123/reveal", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("next handler should be called for prefix-matched exempt path")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
 func TestCSRF_PutAndDeleteRequireCSRF(t *testing.T) {
 	t.Parallel()
 

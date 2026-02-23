@@ -4,17 +4,14 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // CSRF returns middleware that validates the Double Submit Cookie pattern.
-// Safe methods (GET, HEAD, OPTIONS) are exempt. Paths in exemptPaths are
-// also exempt (e.g. webhook endpoints that use their own verification).
-func CSRF(exemptPaths ...string) func(http.Handler) http.Handler {
-	exempt := make(map[string]struct{}, len(exemptPaths))
-	for _, p := range exemptPaths {
-		exempt[p] = struct{}{}
-	}
-
+// Safe methods (GET, HEAD, OPTIONS) are exempt. Paths in exemptPrefixes are
+// also exempt — any request path starting with a listed prefix is skipped
+// (e.g. "/billing/webhook", "/api/v1/secrets/" for unauthenticated reveal).
+func CSRF(exemptPrefixes ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -22,9 +19,11 @@ func CSRF(exemptPaths ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			if _, ok := exempt[r.URL.Path]; ok {
-				next.ServeHTTP(w, r)
-				return
+			for _, prefix := range exemptPrefixes {
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
 			cookie, err := r.Cookie("csrf_token")

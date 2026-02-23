@@ -259,6 +259,7 @@ func Run() error {
 	chain = middleware.CSRF(
 		"/billing/webhook", "/auth/apple/callback",
 		"/auth/token", "/auth/refresh",
+		"/api/v1/secrets/", "/api/v1/contact",
 	)(chain)
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
 	chain = middleware.SecurityHeaders()(chain)
