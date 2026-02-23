@@ -19,6 +19,11 @@ services:
       SENTRY_DSN: "${SENTRY_DSN}"
       API_BASE_URL: "${API_BASE_URL}"
       FRONTEND_BASE_URL: "${FRONTEND_BASE_URL}"
+      APPLE_CLIENT_ID: "${APPLE_CLIENT_ID}"
+      APPLE_TEAM_ID: "${APPLE_TEAM_ID}"
+      APPLE_KEY_ID: "${APPLE_KEY_ID}"
+      APPLE_PRIVATE_KEY: "${APPLE_PRIVATE_KEY}"
+
     volumes:
       - secretdrop_data:/app/db
     deploy:
