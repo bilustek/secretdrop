@@ -80,6 +80,7 @@ secretdrop/
 - `POST /auth/apple/callback` — Apple OAuth callback (form POST)
 - `POST /auth/token` — Mobile token exchange
 - `POST /auth/refresh` — Refresh access token (returns rotated pair)
+- `POST /auth/logout` — Clear auth cookies (200)
 - `POST /billing/checkout` — Stripe checkout session (auth required)
 - `POST /billing/portal` — Stripe customer portal (auth required)
 - `POST /billing/webhook` — Stripe webhook handler
