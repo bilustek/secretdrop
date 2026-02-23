@@ -124,6 +124,8 @@ secretdrop/
 | `APPLE_TEAM_ID` | No | — |
 | `APPLE_KEY_ID` | No | — |
 | `APPLE_PRIVATE_KEY` | No | — |
+| `STRIPE_PROJECT_METAKEY` | No | — |
+| `STRIPE_PROJECT_METADATA` | No | — |
 | `VITE_API_BASE_URL` | No (frontend) | `""` (same origin) |
 | `VITE_ENABLE_APPLE_SIGNIN` | No (frontend) | `""` (enabled by default) |
 

@@ -46,6 +46,13 @@ func (s *Service) HandleWebhook() http.HandlerFunc {
 			return
 		}
 
+		if s.projectMetaKey != "" && !s.matchesProjectMetadata(event) {
+			slog.Debug("skipping webhook event (project mismatch)", "type", event.Type)
+			w.WriteHeader(http.StatusOK)
+
+			return
+		}
+
 		switch event.Type {
 		case "checkout.session.completed":
 			s.handleCheckoutCompleted(r.Context(), event)
@@ -275,6 +282,21 @@ func (s *Service) handleSubscriptionUpdated(ctx context.Context, event stripe.Ev
 	if err := s.userRepo.UpdateTier(ctx, u.ID, tier); err != nil {
 		slog.Error("update user tier", slogKeyError, err, slogKeyUserID, u.ID, "tier", tier)
 	}
+}
+
+// matchesProjectMetadata checks if a Stripe event belongs to this project
+// by inspecting metadata on the event's data object. Different event types
+// carry metadata in different locations (session, subscription, invoice).
+func (s *Service) matchesProjectMetadata(event stripe.Event) bool {
+	var raw struct {
+		Metadata map[string]string `json:"metadata"`
+	}
+
+	if err := json.Unmarshal(event.Data.Raw, &raw); err != nil {
+		return false
+	}
+
+	return raw.Metadata[s.projectMetaKey] == s.projectMetaVal
 }
 
 func tierForStatus(status stripe.SubscriptionStatus) string {

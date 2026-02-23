@@ -162,15 +162,18 @@ func buildEventPayload(t *testing.T, eventType string, dataObj any) []byte {
 	return payload
 }
 
-func newWebhookTestService(t *testing.T, repo *webhookUserRepo) *Service {
+func newWebhookTestService(t *testing.T, repo *webhookUserRepo, opts ...Option) *Service {
 	t.Helper()
+
+	baseOpts := []Option{WithStripeClient(&mockStripeClient{})}
+	baseOpts = append(baseOpts, opts...)
 
 	svc, err := New(
 		"sk_test_key",
 		testWebhookSecret,
 		"price_test",
 		repo,
-		WithStripeClient(&mockStripeClient{}),
+		baseOpts...,
 	)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -494,5 +497,139 @@ func TestHandleWebhook_UnhandledEvent(t *testing.T) {
 
 	if repo.updateSubStatusCalled {
 		t.Error("UpdateSubscriptionStatus should not be called for unhandled events")
+	}
+}
+
+func TestHandleWebhook_ProjectMetadata_Match(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+		"metadata":            map[string]string{"project": "secretdrop"},
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.upsertSubCalled {
+		t.Fatal("UpsertSubscription should be called when metadata matches")
+	}
+}
+
+func TestHandleWebhook_ProjectMetadata_Mismatch(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+		"metadata":            map[string]string{"project": "talentscore"},
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.upsertSubCalled {
+		t.Error("UpsertSubscription should NOT be called when metadata mismatches")
+	}
+
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should NOT be called when metadata mismatches")
+	}
+}
+
+func TestHandleWebhook_ProjectMetadata_NoMetadata(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.upsertSubCalled {
+		t.Error("UpsertSubscription should NOT be called when metadata is missing")
+	}
+}
+
+func TestHandleWebhook_NoProjectFilter_ProcessesAll(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo) // no WithProjectMetadata
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.upsertSubCalled {
+		t.Fatal("UpsertSubscription should be called when no project filter is set")
 	}
 }

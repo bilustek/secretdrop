@@ -84,6 +84,8 @@ type Service struct {
 	cancelURL       string
 	portalReturnURL string
 	notifier        slack.Notifier
+	projectMetaKey  string
+	projectMetaVal  string
 }
 
 // New creates a new billing Service.
@@ -158,6 +160,17 @@ func WithNotifier(n slack.Notifier) Option {
 	}
 }
 
+// WithProjectMetadata sets the metadata key-value pair for filtering Stripe events
+// by project. When set, only webhook events with matching metadata are processed.
+func WithProjectMetadata(key, value string) Option {
+	return func(s *Service) error {
+		s.projectMetaKey = key
+		s.projectMetaVal = value
+
+		return nil
+	}
+}
+
 // WithStripeClient replaces the default Stripe client.
 // This is primarily useful for testing.
 func WithStripeClient(sc StripeClient) Option {
@@ -205,6 +218,14 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 			ClientReferenceID: stripe.String(
 				fmt.Sprintf("%d", claims.UserID),
 			),
+		}
+
+		if s.projectMetaKey != "" && s.projectMetaVal != "" {
+			meta := map[string]string{s.projectMetaKey: s.projectMetaVal}
+			params.Metadata = meta
+			params.SubscriptionData = &stripe.CheckoutSessionCreateSubscriptionDataParams{
+				Metadata: meta,
+			}
 		}
 
 		sess, err := s.stripeClient.CreateCheckoutSession(r.Context(), params)

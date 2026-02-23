@@ -23,6 +23,8 @@ services:
       APPLE_TEAM_ID: "${APPLE_TEAM_ID}"
       APPLE_KEY_ID: "${APPLE_KEY_ID}"
       APPLE_PRIVATE_KEY: "${APPLE_PRIVATE_KEY}"
+      STRIPE_PROJECT_METAKEY: "${STRIPE_PROJECT_METAKEY}"
+      STRIPE_PROJECT_METADATA: "${STRIPE_PROJECT_METADATA}"
 
     volumes:
       - secretdrop_data:/app/db
