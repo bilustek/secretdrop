@@ -131,6 +131,12 @@ func Run() error {
 	authSvc, err := auth.New(jwtSecret,
 		auth.WithGoogleClientID(cfg.GoogleClientID()),
 		auth.WithFrontendBaseURL(cfg.FrontendBaseURL()),
+		auth.WithAppleCredentials(
+			cfg.AppleClientID(),
+			cfg.AppleTeamID(),
+			cfg.AppleKeyID(),
+			cfg.ApplePrivateKey(),
+		),
 	)
 	if err != nil {
 		return fmt.Errorf("create auth service: %w", err)
@@ -188,6 +194,20 @@ func Run() error {
 	mux.HandleFunc("GET /auth/google/callback", authSvc.HandleGoogleCallback(googleCfg, userRepo))
 	mux.HandleFunc("GET /auth/github", authSvc.HandleGithubLogin(githubCfg))
 	mux.HandleFunc("GET /auth/github/callback", authSvc.HandleGithubCallback(githubCfg, userRepo))
+
+	// Apple Sign-In (conditional — only when credentials are configured)
+	if cfg.AppleClientID() != "" {
+		appleCfg := auth.AppleConfig(
+			cfg.AppleClientID(),
+			cfg.APIBaseURL()+"/auth/apple/callback",
+		)
+
+		mux.HandleFunc("GET /auth/apple", authSvc.HandleAppleLogin(appleCfg))
+		mux.HandleFunc("POST /auth/apple/callback", authSvc.HandleAppleCallback(appleCfg, userRepo))
+
+		slog.Info("apple sign-in enabled")
+	}
+
 	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
 	mux.HandleFunc("POST /auth/refresh", authSvc.HandleRefresh(userRepo))
 
