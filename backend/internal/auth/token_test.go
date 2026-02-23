@@ -1061,3 +1061,56 @@ func TestHandleRefresh_InvalidJSON(t *testing.T) {
 		t.Errorf("error message = %q; want %q", resp.Error.Message, wantMsg)
 	}
 }
+
+func TestHandleRefresh_RejectsAccessToken(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	// Create a user and generate a token pair.
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider:   "google",
+		ProviderID: "reject-access-sub",
+		Email:      "reject@example.com",
+		Name:       "Reject User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	pair, err := svc.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	// Use the ACCESS token as refresh_token — should be rejected.
+	body := fmt.Sprintf(`{"refresh_token":%q}`, pair.AccessToken)
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+
+	var resp errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_refresh_token" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_refresh_token")
+	}
+}

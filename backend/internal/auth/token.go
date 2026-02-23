@@ -227,6 +227,19 @@ func (s *Service) HandleRefresh(userRepo user.Repository) http.HandlerFunc {
 			return
 		}
 
+		// Reject access tokens used as refresh tokens.
+		// Refresh tokens are generated without Email and Tier claims.
+		if claims.Email != "" || claims.Tier != "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"error": map[string]string{
+					"type":    "invalid_refresh_token",
+					"message": "Invalid or expired refresh token",
+				},
+			})
+
+			return
+		}
+
 		u, err := userRepo.FindByID(r.Context(), claims.UserID)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{
