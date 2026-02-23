@@ -107,6 +107,7 @@ Interactive API docs (Scalar UI) are available at [`/docs`](https://api.secretdr
 | `GET`  | `/auth/github` | No | GitHub OAuth login redirect |
 | `GET`  | `/auth/github/callback` | No | GitHub OAuth callback |
 | `POST` | `/auth/token` | No | Mobile token exchange |
+| `POST` | `/auth/refresh` | No | Refresh access token (rotated pair) |
 | `POST` | `/billing/checkout` | Bearer | Create Stripe checkout session |
 | `POST` | `/billing/portal` | Bearer | Stripe customer portal |
 | `POST` | `/billing/webhook` | No | Stripe webhook handler |

@@ -190,6 +190,78 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// refreshRequest is the request body for POST /auth/refresh.
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// HandleRefresh validates a refresh token and returns a new rotated token pair.
+func (s *Service) HandleRefresh(userRepo user.Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req refreshRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]string{"type": "validation_error", "message": "Invalid JSON body"},
+			})
+
+			return
+		}
+
+		if req.RefreshToken == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": map[string]string{"type": "validation_error", "message": "refresh_token is required"},
+			})
+
+			return
+		}
+
+		claims, err := s.VerifyToken(req.RefreshToken)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"error": map[string]string{
+					"type":    "invalid_refresh_token",
+					"message": "Invalid or expired refresh token",
+				},
+			})
+
+			return
+		}
+
+		// Reject access tokens used as refresh tokens.
+		// Refresh tokens are generated without Email and Tier claims.
+		if claims.Email != "" || claims.Tier != "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"error": map[string]string{
+					"type":    "invalid_refresh_token",
+					"message": "Invalid or expired refresh token",
+				},
+			})
+
+			return
+		}
+
+		u, err := userRepo.FindByID(r.Context(), claims.UserID)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"error": map[string]string{"type": "invalid_refresh_token", "message": "User not found"},
+			})
+
+			return
+		}
+
+		pair, err := s.GenerateTokenPair(u.ID, u.Email, u.Tier)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"error": map[string]string{"type": "internal_error", "message": "Failed to generate token"},
+			})
+
+			return
+		}
+
+		writeJSON(w, http.StatusOK, pair)
+	}
+}
+
 func verifyGoogleIDToken(ctx context.Context, idToken, expectedAud string) (*googleTokenInfo, error) {
 	reqURL := googleTokenInfoURL + "?id_token=" + idToken
 
