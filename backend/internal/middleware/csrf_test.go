@@ -159,6 +159,47 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 	}
 }
 
+func TestCSRF_SkipsAuthorizationHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{"bearer token", "Bearer eyJhbGciOiJIUzI1NiJ9.test"},
+		{"basic auth", "Basic dXNlcjpwYXNz"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			called := false
+
+			inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			handler := middleware.CSRF()(inner)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets", nil)
+			req.Header.Set("Authorization", tt.value)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if !called {
+				t.Errorf("%s: next handler should be called when Authorization header present", tt.name)
+			}
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("%s: status = %d; want %d", tt.name, rec.Code, http.StatusOK)
+			}
+		})
+	}
+}
+
 func TestCSRF_ExemptPrefixMatch(t *testing.T) {
 	t.Parallel()
 
