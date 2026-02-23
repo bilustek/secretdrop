@@ -1,0 +1,56 @@
+package middleware
+
+import (
+	"crypto/subtle"
+	"fmt"
+	"net/http"
+)
+
+// CSRF returns middleware that validates the Double Submit Cookie pattern.
+// Safe methods (GET, HEAD, OPTIONS) are exempt. Paths in exemptPaths are
+// also exempt (e.g. webhook endpoints that use their own verification).
+func CSRF(exemptPaths ...string) func(http.Handler) http.Handler {
+	exempt := make(map[string]struct{}, len(exemptPaths))
+	for _, p := range exemptPaths {
+		exempt[p] = struct{}{}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if _, ok := exempt[r.URL.Path]; ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			cookie, err := r.Cookie("csrf_token")
+			if err != nil || cookie.Value == "" {
+				writeCSRFError(w)
+				return
+			}
+
+			header := r.Header.Get("X-CSRF-Token")
+			if header == "" {
+				writeCSRFError(w)
+				return
+			}
+
+			if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(header)) != 1 {
+				writeCSRFError(w)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func writeCSRFError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	fmt.Fprint(w, `{"error":{"type":"csrf_error","message":"CSRF validation failed"}}`)
+}
