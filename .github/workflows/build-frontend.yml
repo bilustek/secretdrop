@@ -30,5 +30,7 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/secretdrop-frontend:latest
           build-args: |
             VITE_API_BASE_URL=https://api.secretdrop.us
+            VITE_ENABLE_GOOGLE_SIGNIN=${{ vars.VITE_ENABLE_GOOGLE_SIGNIN }}
+            VITE_ENABLE_APPLE_SIGNIN=${{ vars.VITE_ENABLE_APPLE_SIGNIN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
