@@ -1,12 +1,16 @@
 package auth_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -136,5 +140,138 @@ func TestGenerateAppleClientSecret_InvalidKey(t *testing.T) {
 	_, err = svc.GenerateAppleClientSecret()
 	if err == nil {
 		t.Fatal("GenerateAppleClientSecret() should fail with invalid key")
+	}
+}
+
+func TestVerifyAppleIDToken(t *testing.T) { //nolint:paralleltest // uses httptest server
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	// Create a mock JWKS endpoint
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pubKey := privKey.PublicKey
+		xBytes := pubKey.X.Bytes()
+		yBytes := pubKey.Y.Bytes()
+
+		// Pad to 32 bytes for P-256
+		for len(xBytes) < 32 {
+			xBytes = append([]byte{0}, xBytes...)
+		}
+		for len(yBytes) < 32 {
+			yBytes = append([]byte{0}, yBytes...)
+		}
+
+		jwks := map[string]any{
+			"keys": []map[string]any{
+				{
+					"kty": "EC",
+					"kid": "test-kid",
+					"use": "sig",
+					"alg": "ES256",
+					"crv": "P-256",
+					"x":   base64.RawURLEncoding.EncodeToString(xBytes),
+					"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jwks) //nolint:errcheck // test helper
+	}))
+	defer jwksServer.Close()
+
+	// Create a signed ID token
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":   "https://appleid.apple.com",
+		"aud":   "com.bilustek.secretdrop.web",
+		"sub":   "apple-user-001",
+		"email": "user@example.com",
+		"iat":   now.Unix(),
+		"exp":   now.Add(10 * time.Minute).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = "test-kid"
+
+	idToken, err := token.SignedString(privKey)
+	if err != nil {
+		t.Fatalf("sign id token: %v", err)
+	}
+
+	info, err := auth.VerifyAppleIDToken(context.Background(), idToken, "com.bilustek.secretdrop.web", jwksServer.URL)
+	if err != nil {
+		t.Fatalf("VerifyAppleIDToken() error = %v", err)
+	}
+
+	if info.Sub != "apple-user-001" {
+		t.Errorf("Sub = %q; want %q", info.Sub, "apple-user-001")
+	}
+
+	if info.Email != "user@example.com" {
+		t.Errorf("Email = %q; want %q", info.Email, "user@example.com")
+	}
+}
+
+func TestVerifyAppleIDToken_WrongAudience(t *testing.T) { //nolint:paralleltest // uses httptest server
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		pubKey := privKey.PublicKey
+		xBytes := pubKey.X.Bytes()
+		yBytes := pubKey.Y.Bytes()
+
+		for len(xBytes) < 32 {
+			xBytes = append([]byte{0}, xBytes...)
+		}
+		for len(yBytes) < 32 {
+			yBytes = append([]byte{0}, yBytes...)
+		}
+
+		jwks := map[string]any{
+			"keys": []map[string]any{
+				{
+					"kty": "EC",
+					"kid": "test-kid",
+					"use": "sig",
+					"alg": "ES256",
+					"crv": "P-256",
+					"x":   base64.RawURLEncoding.EncodeToString(xBytes),
+					"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jwks) //nolint:errcheck // test helper
+	}))
+	defer jwksServer.Close()
+
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":   "https://appleid.apple.com",
+		"aud":   "com.other.app",
+		"sub":   "apple-user-001",
+		"email": "user@example.com",
+		"iat":   now.Unix(),
+		"exp":   now.Add(10 * time.Minute).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = "test-kid"
+
+	idToken, err := token.SignedString(privKey)
+	if err != nil {
+		t.Fatalf("sign id token: %v", err)
+	}
+
+	_, err = auth.VerifyAppleIDToken(context.Background(), idToken, "com.bilustek.secretdrop.web", jwksServer.URL)
+	if err == nil {
+		t.Fatal("VerifyAppleIDToken() should fail with wrong audience")
 	}
 }
