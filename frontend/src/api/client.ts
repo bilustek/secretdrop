@@ -145,11 +145,21 @@ export interface CheckoutResponse {
   url: string
 }
 
-async function simpleFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+async function softAuthFetch<T>(path: string): Promise<T> {
+  const url = `${API_BASE}${path}`
+  const opts: RequestInit = {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-  })
+  }
+
+  let res = await fetch(url, opts)
+
+  if (res.status === 401) {
+    const refreshed = await tryRefresh()
+    if (refreshed) {
+      res = await fetch(url, opts)
+    }
+  }
 
   if (!res.ok) {
     const body: ApiError = await res.json()
@@ -160,7 +170,7 @@ async function simpleFetch<T>(path: string): Promise<T> {
 }
 
 export const api = {
-  me: () => simpleFetch<MeResponse>("/me"),
+  me: () => softAuthFetch<MeResponse>("/me"),
 
   createSecret: (data: CreateSecretRequest) =>
     request<CreateSecretResponse>("/secrets", {

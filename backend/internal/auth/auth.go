@@ -118,17 +118,18 @@ func (s *Service) SetAuthCookies(w http.ResponseWriter, pair *TokenPair) error {
 		return fmt.Errorf("set auth cookies: %w", err)
 	}
 
-	SetTokenCookies(w, pair, csrfToken, s.secureCookies, s.accessExpiry, s.refreshExpiry)
+	domain := CookieDomain(s.frontendBaseURL)
+	SetTokenCookies(w, pair, csrfToken, s.secureCookies, domain, s.accessExpiry, s.refreshExpiry)
 
 	return nil
 }
 
 // HandleLogout clears all auth cookies.
-//
-//nolint:revive // receiver unused but method needed for API consistency
 func (s *Service) HandleLogout() http.HandlerFunc {
+	domain := CookieDomain(s.frontendBaseURL)
+
 	return func(w http.ResponseWriter, _ *http.Request) {
-		ClearTokenCookies(w)
+		ClearTokenCookies(w, domain)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }

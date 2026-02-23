@@ -34,7 +34,7 @@ func TestSetTokenCookies(t *testing.T) {
 			t.Parallel()
 
 			rec := httptest.NewRecorder()
-			auth.SetTokenCookies(rec, pair, csrfToken, tt.secure, accessExpiry, refreshExpiry)
+			auth.SetTokenCookies(rec, pair, csrfToken, tt.secure, "", accessExpiry, refreshExpiry)
 
 			cookies := rec.Result().Cookies()
 			if len(cookies) != 3 {
@@ -143,7 +143,7 @@ func TestClearTokenCookies(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	auth.ClearTokenCookies(rec)
+	auth.ClearTokenCookies(rec, "")
 
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 3 {
@@ -214,7 +214,7 @@ func TestClearTokenCookies_HttpOnlyFlags(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	auth.ClearTokenCookies(rec)
+	auth.ClearTokenCookies(rec, "")
 
 	cookies := rec.Result().Cookies()
 	cookieMap := make(map[string]*http.Cookie)
@@ -277,6 +277,53 @@ func TestGenerateCSRFToken_Uniqueness(t *testing.T) {
 
 	if token1 == token2 {
 		t.Error("two calls to GenerateCSRFToken() returned the same value")
+	}
+}
+
+func TestCookieDomain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"production frontend", "https://secretdrop.us", "secretdrop.us"},
+		{"production api", "https://api.secretdrop.us", "secretdrop.us"},
+		{"localhost", "http://localhost:3000", ""},
+		{"127.0.0.1", "http://127.0.0.1:8080", ""},
+		{"ipv6 loopback", "http://[::1]:8080", ""},
+		{"invalid url", "://bad", ""},
+		{"single part host", "http://localhost", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := auth.CookieDomain(tt.url)
+			if got != tt.want {
+				t.Errorf("CookieDomain(%q) = %q; want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetTokenCookies_WithDomain(t *testing.T) {
+	t.Parallel()
+
+	pair := &auth.TokenPair{
+		AccessToken:  "test-access",
+		RefreshToken: "test-refresh",
+	}
+
+	rec := httptest.NewRecorder()
+	auth.SetTokenCookies(rec, pair, "csrf", true, "secretdrop.us", 15*time.Minute, 30*24*time.Hour)
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Domain != "secretdrop.us" {
+			t.Errorf("cookie %q Domain = %q; want %q", c.Name, c.Domain, "secretdrop.us")
+		}
 	}
 }
 

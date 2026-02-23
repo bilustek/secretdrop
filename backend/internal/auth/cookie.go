@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -23,17 +25,21 @@ const (
 
 // SetTokenCookies writes access, refresh, and CSRF cookies to the response.
 // The access and refresh cookies are HttpOnly; the CSRF cookie is readable by JavaScript.
+// The cookieDomain parameter sets the Domain attribute on cookies so they are accessible
+// across subdomains (e.g. ".secretdrop.us" for api.secretdrop.us + secretdrop.us).
 func SetTokenCookies(
 	w http.ResponseWriter,
 	pair *TokenPair,
 	csrfToken string,
 	secure bool,
+	cookieDomain string,
 	accessExpiry, refreshExpiry time.Duration,
 ) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieAccessToken,
 		Value:    pair.AccessToken,
 		Path:     "/",
+		Domain:   cookieDomain,
 		MaxAge:   int(accessExpiry.Seconds()),
 		HttpOnly: true,
 		Secure:   secure,
@@ -44,6 +50,7 @@ func SetTokenCookies(
 		Name:     CookieRefreshToken,
 		Value:    pair.RefreshToken,
 		Path:     "/auth/refresh",
+		Domain:   cookieDomain,
 		MaxAge:   int(refreshExpiry.Seconds()),
 		HttpOnly: true,
 		Secure:   secure,
@@ -54,6 +61,7 @@ func SetTokenCookies(
 		Name:     CookieCSRFToken,
 		Value:    csrfToken,
 		Path:     "/",
+		Domain:   cookieDomain,
 		MaxAge:   int(refreshExpiry.Seconds()),
 		HttpOnly: false,
 		Secure:   secure,
@@ -61,12 +69,35 @@ func SetTokenCookies(
 	})
 }
 
+// CookieDomain extracts the root domain from a URL for cross-subdomain cookie sharing.
+// For "https://secretdrop.us" or "https://api.secretdrop.us" it returns "secretdrop.us".
+// For localhost URLs it returns "" (no domain attribute needed).
+func CookieDomain(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return ""
+	}
+
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	return strings.Join(parts[len(parts)-2:], ".")
+}
+
 // ClearTokenCookies removes the access, refresh, and CSRF cookies by setting MaxAge to -1.
-func ClearTokenCookies(w http.ResponseWriter) {
+func ClearTokenCookies(w http.ResponseWriter, cookieDomain string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieAccessToken,
 		Value:    "",
 		Path:     "/",
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
@@ -75,6 +106,7 @@ func ClearTokenCookies(w http.ResponseWriter) {
 		Name:     CookieRefreshToken,
 		Value:    "",
 		Path:     "/auth/refresh",
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
@@ -83,6 +115,7 @@ func ClearTokenCookies(w http.ResponseWriter) {
 		Name:   CookieCSRFToken,
 		Value:  "",
 		Path:   "/",
+		Domain: cookieDomain,
 		MaxAge: -1,
 	})
 }
