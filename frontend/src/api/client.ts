@@ -65,41 +65,7 @@ function forceLogout(): never {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("access_token")
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) ?? {}),
-  }
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  })
-
-  if (res.status === 401) {
-    const refreshed = await tryRefresh()
-    if (refreshed) {
-      const newToken = localStorage.getItem("access_token")
-      headers["Authorization"] = `Bearer ${newToken}`
-
-      const retry = await fetch(`${API_BASE}${path}`, { ...options, headers })
-      if (!retry.ok) {
-        if (retry.status === 401) forceLogout()
-
-        const body: ApiError = await retry.json()
-        throw new AppError(body.error.type, body.error.message, retry.status)
-      }
-
-      return retry.json() as Promise<T>
-    }
-
-    forceLogout()
-  }
+  const res = await authenticatedFetch(`${API_BASE}${path}`, options)
 
   if (!res.ok) {
     const body: ApiError = await res.json()
