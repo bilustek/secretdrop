@@ -546,12 +546,33 @@ func TestHandleAppleCallback_Success(t *testing.T) { //nolint:paralleltest // mo
 		t.Errorf("redirect path = %q; want %q", locURL.Path, "/auth/callback")
 	}
 
-	if locURL.Query().Get("access_token") == "" {
-		t.Error("access_token missing from redirect URL")
+	// Tokens should NOT be in the URL anymore.
+	if locURL.Query().Get("access_token") != "" {
+		t.Error("access_token should not be in redirect URL query params")
 	}
 
-	if locURL.Query().Get("refresh_token") == "" {
-		t.Error("refresh_token missing from redirect URL")
+	if locURL.Query().Get("refresh_token") != "" {
+		t.Error("refresh_token should not be in redirect URL query params")
+	}
+
+	// Verify: auth cookies are set instead.
+	cookies := rec.Result().Cookies()
+	cookieMap := make(map[string]*http.Cookie)
+
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	if _, ok := cookieMap[auth.CookieAccessToken]; !ok {
+		t.Error("access_token cookie not set")
+	}
+
+	if _, ok := cookieMap[auth.CookieRefreshToken]; !ok {
+		t.Error("refresh_token cookie not set")
+	}
+
+	if _, ok := cookieMap[auth.CookieCSRFToken]; !ok {
+		t.Error("csrf_token cookie not set")
 	}
 }
 

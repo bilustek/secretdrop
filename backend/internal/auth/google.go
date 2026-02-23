@@ -142,7 +142,7 @@ func (s *Service) HandleGoogleCallback(cfg *oauth2.Config, userRepo user.Reposit
 			return
 		}
 
-		s.redirectWithTokens(w, r, pair)
+		s.RedirectWithTokens(w, r, pair)
 	}
 }
 
@@ -179,15 +179,18 @@ func generateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// redirectWithTokens redirects to the frontend callback with tokens in query params.
-func (s *Service) redirectWithTokens(w http.ResponseWriter, r *http.Request, pair *TokenPair) {
+// RedirectWithTokens sets auth cookies and redirects to the frontend callback.
+func (s *Service) RedirectWithTokens(w http.ResponseWriter, r *http.Request, pair *TokenPair) {
+	if err := s.SetAuthCookies(w, pair); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"type": "internal_error", "message": "Failed to set auth cookies"},
+		})
+
+		return
+	}
+
 	u, _ := url.Parse(s.frontendBaseURL)
 	u.Path = "/auth/callback"
-
-	q := u.Query()
-	q.Set("access_token", pair.AccessToken)
-	q.Set("refresh_token", pair.RefreshToken)
-	u.RawQuery = q.Encode()
 
 	// 303 See Other ensures the browser always uses GET for the redirect,
 	// even when the original request was POST (e.g. Apple form_post callback).
