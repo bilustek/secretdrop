@@ -21,6 +21,7 @@ func clearAllEnvVars(t *testing.T) {
 		"SLACK_WEBHOOK_SUBSCRIPTIONS", "SLACK_WEBHOOK_NOTIFICATIONS",
 		"ADMIN_USERNAME", "ADMIN_PASSWORD",
 		"SENTRY_DSN", "SENTRY_TRACES_SAMPLE_RATE",
+		"APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY",
 	} {
 		t.Setenv(key, "")
 	}
@@ -700,5 +701,61 @@ func TestWithSentryTracesSampleRateInvalidAboveOne(t *testing.T) {
 	_, err := config.Load(config.WithSentryTracesSampleRate(1.5))
 	if err == nil {
 		t.Fatal("WithSentryTracesSampleRate(1.5) should fail")
+	}
+}
+
+func TestAppleConfigDefaults(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.AppleClientID() != "" {
+		t.Errorf("AppleClientID() = %q; want empty", cfg.AppleClientID())
+	}
+
+	if cfg.AppleTeamID() != "" {
+		t.Errorf("AppleTeamID() = %q; want empty", cfg.AppleTeamID())
+	}
+
+	if cfg.AppleKeyID() != "" {
+		t.Errorf("AppleKeyID() = %q; want empty", cfg.AppleKeyID())
+	}
+
+	if cfg.ApplePrivateKey() != "" {
+		t.Errorf("ApplePrivateKey() = %q; want empty", cfg.ApplePrivateKey())
+	}
+}
+
+func TestAppleConfigFromEnvVars(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("APPLE_CLIENT_ID", "com.example.app")
+	t.Setenv("APPLE_TEAM_ID", "TEAMID123")
+	t.Setenv("APPLE_KEY_ID", "KEYID456")
+	t.Setenv("APPLE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.AppleClientID() != "com.example.app" {
+		t.Errorf("AppleClientID() = %q; want %q", cfg.AppleClientID(), "com.example.app")
+	}
+
+	if cfg.AppleTeamID() != "TEAMID123" {
+		t.Errorf("AppleTeamID() = %q; want %q", cfg.AppleTeamID(), "TEAMID123")
+	}
+
+	if cfg.AppleKeyID() != "KEYID456" {
+		t.Errorf("AppleKeyID() = %q; want %q", cfg.AppleKeyID(), "KEYID456")
+	}
+
+	if cfg.ApplePrivateKey() != "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----" {
+		t.Errorf("ApplePrivateKey() = %q; want PEM key", cfg.ApplePrivateKey())
 	}
 }

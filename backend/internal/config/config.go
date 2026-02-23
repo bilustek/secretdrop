@@ -51,6 +51,11 @@ type Config struct {
 
 	sentryDSN              string
 	sentryTracesSampleRate float64
+
+	appleClientID   string
+	appleTeamID     string
+	appleKeyID      string
+	applePrivateKey string
 }
 
 // Option configures a Config value.
@@ -267,6 +272,18 @@ func (c *Config) SentryDSN() string { return c.sentryDSN }
 // SentryTracesSampleRate returns the Sentry traces sample rate.
 func (c *Config) SentryTracesSampleRate() float64 { return c.sentryTracesSampleRate }
 
+// AppleClientID returns the Apple Sign-In client ID (Services ID).
+func (c *Config) AppleClientID() string { return c.appleClientID }
+
+// AppleTeamID returns the Apple Developer Team ID.
+func (c *Config) AppleTeamID() string { return c.appleTeamID }
+
+// AppleKeyID returns the Apple Sign-In key ID.
+func (c *Config) AppleKeyID() string { return c.appleKeyID }
+
+// ApplePrivateKey returns the Apple Sign-In private key in PEM format.
+func (c *Config) ApplePrivateKey() string { return c.applePrivateKey }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -329,6 +346,11 @@ func Load(opts ...Option) (*Config, error) {
 
 		c.sentryTracesSampleRate = rate
 	}
+
+	c.appleClientID = os.Getenv("APPLE_CLIENT_ID")
+	c.appleTeamID = os.Getenv("APPLE_TEAM_ID")
+	c.appleKeyID = os.Getenv("APPLE_KEY_ID")
+	c.applePrivateKey = os.Getenv("APPLE_PRIVATE_KEY")
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
