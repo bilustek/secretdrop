@@ -96,11 +96,11 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 		INSERT INTO users (provider, provider_id, email, name, avatar_url)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(email) DO UPDATE SET
-			provider   = excluded.provider,
+			provider    = excluded.provider,
 			provider_id = excluded.provider_id,
-			name       = excluded.name,
-			avatar_url = excluded.avatar_url,
-			updated_at = CURRENT_TIMESTAMP
+			name        = CASE WHEN excluded.name = '' THEN users.name ELSE excluded.name END,
+			avatar_url  = CASE WHEN excluded.avatar_url = '' THEN users.avatar_url ELSE excluded.avatar_url END,
+			updated_at  = CURRENT_TIMESTAMP
 		RETURNING id, provider, provider_id, email, name, avatar_url,
 			tier, secrets_used, created_at, updated_at, secrets_limit
 	`

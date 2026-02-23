@@ -160,6 +160,89 @@ func TestUpsert_SameEmailDifferentProvider(t *testing.T) {
 	}
 }
 
+func TestUpsert_EmptyNamePreservesExisting(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// First login — Apple sends name on first consent.
+	first, err := repo.Upsert(ctx, &model.User{
+		Provider:   "apple",
+		ProviderID: "apple-001",
+		Email:      "eve@example.com",
+		Name:       "Eve Apple",
+		AvatarURL:  "",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() first call error = %v", err)
+	}
+
+	if first.Name != "Eve Apple" {
+		t.Fatalf("Name = %q; want %q", first.Name, "Eve Apple")
+	}
+
+	// Second login — Apple does NOT send name on subsequent logins.
+	second, err := repo.Upsert(ctx, &model.User{
+		Provider:   "apple",
+		ProviderID: "apple-001",
+		Email:      "eve@example.com",
+		Name:       "",
+		AvatarURL:  "",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() second call error = %v", err)
+	}
+
+	if second.ID != first.ID {
+		t.Errorf("ID = %d; want %d (same user by email)", second.ID, first.ID)
+	}
+
+	// Name must be preserved when empty string is passed.
+	if second.Name != "Eve Apple" {
+		t.Errorf("Name = %q; want %q (should be preserved when empty)", second.Name, "Eve Apple")
+	}
+}
+
+func TestUpsert_EmptyAvatarPreservesExisting(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// First login with avatar.
+	if _, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "google-avatar-001",
+		Email:      "frank@example.com",
+		Name:       "Frank",
+		AvatarURL:  "https://example.com/frank.png",
+	}); err != nil {
+		t.Fatalf("Upsert() first call error = %v", err)
+	}
+
+	// Second login with empty avatar should preserve existing.
+	second, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "google-avatar-001",
+		Email:      "frank@example.com",
+		Name:       "Frank Updated",
+		AvatarURL:  "",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() second call error = %v", err)
+	}
+
+	if second.AvatarURL != "https://example.com/frank.png" {
+		t.Errorf("AvatarURL = %q; want %q (should be preserved when empty)", second.AvatarURL, "https://example.com/frank.png")
+	}
+
+	// Non-empty name should still be updated.
+	if second.Name != "Frank Updated" {
+		t.Errorf("Name = %q; want %q", second.Name, "Frank Updated")
+	}
+}
+
 func TestFindByID(t *testing.T) {
 	t.Parallel()
 
