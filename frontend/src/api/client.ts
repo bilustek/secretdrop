@@ -145,8 +145,22 @@ export interface CheckoutResponse {
   url: string
 }
 
+async function simpleFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  })
+
+  if (!res.ok) {
+    const body: ApiError = await res.json()
+    throw new AppError(body.error.type, body.error.message, res.status)
+  }
+
+  return res.json() as Promise<T>
+}
+
 export const api = {
-  me: () => request<MeResponse>("/me"),
+  me: () => simpleFetch<MeResponse>("/me"),
 
   createSecret: (data: CreateSecretRequest) =>
     request<CreateSecretResponse>("/secrets", {
