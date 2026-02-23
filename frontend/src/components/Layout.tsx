@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router"
 import { Lock, CreditCard, LogOut, Trash2, User } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { ThemeToggle } from "./ThemeToggle"
+import { UserAvatar } from "./UserAvatar"
 import { api } from "../api/client"
 import { VERSION } from "../version"
 
@@ -72,11 +73,10 @@ export function Layout() {
                     onClick={() => setMenuOpen(!menuOpen)}
                     className="rounded-full focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                   >
-                    <img
-                      src={auth.user.avatar_url}
-                      alt=""
-                      referrerPolicy="no-referrer"
-                      className="w-8 h-8 rounded-full"
+                    <UserAvatar
+                      avatarUrl={auth.user.avatar_url}
+                      name={auth.user.name}
+                      email={auth.user.email}
                     />
                   </button>
                   {menuOpen && (
