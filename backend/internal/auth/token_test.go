@@ -1062,6 +1062,106 @@ func TestHandleRefresh_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestHandleRefresh_ViaCookie(t *testing.T) {
+	t.Parallel()
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+
+	// Create a user in the repo.
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider:   "google",
+		ProviderID: "cookie-refresh-123",
+		Email:      "cookie-refresh@example.com",
+		Name:       "Cookie Refresh User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	svc, err := auth.New("test-secret", auth.WithSecureCookies(true))
+	if err != nil {
+		t.Fatalf("auth.New() error = %v", err)
+	}
+
+	// Generate initial token pair.
+	originalPair, err := svc.GenerateTokenPair(u.ID, u.Email, u.Tier)
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	handler := svc.HandleRefresh(userRepo)
+
+	// Sleep briefly so new tokens get a different iat (JWT uses second precision).
+	time.Sleep(1100 * time.Millisecond)
+
+	// Send request with refresh_token as a cookie (no JSON body).
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{
+		Name:  auth.CookieRefreshToken,
+		Value: originalPair.RefreshToken,
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 200
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	// Verify: response body is {"status":"ok"} (not a token pair).
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body["status"] != "ok" {
+		t.Errorf("status = %q; want %q", body["status"], "ok")
+	}
+
+	// Verify: new auth cookies are set.
+	cookies := rec.Result().Cookies()
+	cookieMap := make(map[string]*http.Cookie)
+
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	ac, ok := cookieMap[auth.CookieAccessToken]
+	if !ok {
+		t.Fatal("access_token cookie not set in response")
+	}
+
+	if ac.Value == "" {
+		t.Error("access_token cookie value is empty")
+	}
+
+	if ac.Value == originalPair.AccessToken {
+		t.Error("new access_token cookie should differ from original (rotation)")
+	}
+
+	rc, ok := cookieMap[auth.CookieRefreshToken]
+	if !ok {
+		t.Fatal("refresh_token cookie not set in response")
+	}
+
+	if rc.Value == "" {
+		t.Error("refresh_token cookie value is empty")
+	}
+
+	if rc.Value == originalPair.RefreshToken {
+		t.Error("new refresh_token cookie should differ from original (rotation)")
+	}
+
+	if _, ok := cookieMap[auth.CookieCSRFToken]; !ok {
+		t.Error("csrf_token cookie not set in response")
+	}
+}
+
 func TestHandleRefresh_RejectsAccessToken(t *testing.T) {
 	t.Parallel()
 

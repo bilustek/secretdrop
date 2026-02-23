@@ -196,18 +196,36 @@ type refreshRequest struct {
 }
 
 // HandleRefresh validates a refresh token and returns a new rotated token pair.
+// It tries reading the refresh_token from a cookie first (web clients), then
+// falls back to the JSON body (mobile clients). If the token came from a cookie,
+// the response sets new auth cookies; otherwise a JSON token pair is returned.
 func (s *Service) HandleRefresh(userRepo user.Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req refreshRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{
-				"error": map[string]string{"type": "validation_error", "message": "Invalid JSON body"},
-			})
+		// Try cookie first (web clients).
+		var refreshTokenStr string
 
-			return
+		fromCookie := false
+
+		if cookie, err := r.Cookie(CookieRefreshToken); err == nil && cookie.Value != "" {
+			refreshTokenStr = cookie.Value
+			fromCookie = true
 		}
 
-		if req.RefreshToken == "" {
+		// Fall back to JSON body (mobile clients).
+		if refreshTokenStr == "" {
+			var req refreshRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{
+					"error": map[string]string{"type": "validation_error", "message": "Invalid JSON body"},
+				})
+
+				return
+			}
+
+			refreshTokenStr = req.RefreshToken
+		}
+
+		if refreshTokenStr == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]any{
 				"error": map[string]string{"type": "validation_error", "message": "refresh_token is required"},
 			})
@@ -215,7 +233,7 @@ func (s *Service) HandleRefresh(userRepo user.Repository) http.HandlerFunc {
 			return
 		}
 
-		claims, err := s.VerifyToken(req.RefreshToken)
+		claims, err := s.VerifyToken(refreshTokenStr)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{
 				"error": map[string]string{
@@ -258,7 +276,20 @@ func (s *Service) HandleRefresh(userRepo user.Repository) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, pair)
+		// Cookie-based clients get cookies. Mobile clients get JSON.
+		if fromCookie {
+			if setErr := s.SetAuthCookies(w, pair); setErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]any{
+					"error": map[string]string{"type": "internal_error", "message": "Failed to set auth cookies"},
+				})
+
+				return
+			}
+
+			writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		} else {
+			writeJSON(w, http.StatusOK, pair)
+		}
 	}
 }
 
