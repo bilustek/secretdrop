@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"strings"
@@ -302,6 +303,7 @@ func (s *Service) HandleAppleCallback(cfg *oauth2.Config, userRepo user.Reposito
 		// 3. Generate client_secret JWT
 		clientSecret, err := s.GenerateAppleClientSecret()
 		if err != nil {
+			slog.Error("apple client secret generation failed", "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]any{
 				"error": map[string]string{"type": "internal_error", "message": "Failed to generate client secret"},
 			})
@@ -317,6 +319,7 @@ func (s *Service) HandleAppleCallback(cfg *oauth2.Config, userRepo user.Reposito
 
 		token, err := cfgWithSecret.Exchange(r.Context(), code)
 		if err != nil {
+			slog.Error("apple code exchange failed", "error", err)
 			writeJSON(w, http.StatusUnauthorized, map[string]any{
 				"error": map[string]string{"type": "oauth_failed", "message": "Failed to exchange authorization code"},
 			})
@@ -336,6 +339,7 @@ func (s *Service) HandleAppleCallback(cfg *oauth2.Config, userRepo user.Reposito
 
 		idInfo, err := VerifyAppleIDToken(r.Context(), rawIDToken, s.appleClientID, "")
 		if err != nil {
+			slog.Error("apple id token verification failed", "error", err)
 			writeJSON(w, http.StatusUnauthorized, map[string]any{
 				"error": map[string]string{"type": "oauth_failed", "message": "Failed to verify Apple ID token"},
 			})
