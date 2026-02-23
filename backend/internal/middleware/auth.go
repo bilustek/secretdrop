@@ -16,20 +16,34 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
+// extractToken extracts the JWT token from the request.
+// Priority: cookie > Authorization Bearer header.
+func extractToken(r *http.Request) string {
+	if cookie, err := r.Cookie("access_token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return ""
+	}
+
+	token := strings.TrimPrefix(header, "Bearer ")
+	if token == header {
+		return ""
+	}
+
+	return token
+}
+
 // OptionalAuthenticate returns middleware that sets user context from a JWT
-// Bearer token if present, but does NOT reject requests without tokens.
-// Individual handlers decide whether authentication is required.
+// token (cookie or Bearer header) if present, but does NOT reject requests
+// without tokens. Individual handlers decide whether authentication is required.
 func OptionalAuthenticate(authSvc *auth.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			token := strings.TrimPrefix(header, "Bearer ")
-			if token == header { // no "Bearer " prefix found
+			token := extractToken(r)
+			if token == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -52,19 +66,13 @@ func OptionalAuthenticate(authSvc *auth.Service) func(http.Handler) http.Handler
 	}
 }
 
-// Authenticate returns middleware that validates JWT Bearer tokens.
+// Authenticate returns middleware that validates JWT tokens from cookie or Bearer header.
 func Authenticate(authSvc *auth.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				writeAuthError(w, "Authorization header required")
-				return
-			}
-
-			token := strings.TrimPrefix(header, "Bearer ")
-			if token == header { // no "Bearer " prefix found
-				writeAuthError(w, "Bearer token required")
+			token := extractToken(r)
+			if token == "" {
+				writeAuthError(w, "Authentication required")
 				return
 			}
 

@@ -113,8 +113,8 @@ func TestAuthenticate_MissingHeader(t *testing.T) {
 		t.Errorf("error type = %q; want %q", resp.Error.Type, "unauthorized")
 	}
 
-	if resp.Error.Message != "Authorization header required" {
-		t.Errorf("error message = %q; want %q", resp.Error.Message, "Authorization header required")
+	if resp.Error.Message != "Authentication required" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Authentication required")
 	}
 
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
@@ -153,8 +153,8 @@ func TestAuthenticate_NoBearerPrefix(t *testing.T) {
 		t.Errorf("error type = %q; want %q", resp.Error.Type, "unauthorized")
 	}
 
-	if resp.Error.Message != "Bearer token required" {
-		t.Errorf("error message = %q; want %q", resp.Error.Message, "Bearer token required")
+	if resp.Error.Message != "Authentication required" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Authentication required")
 	}
 }
 
@@ -457,5 +457,156 @@ func TestAuthenticate_SetsSentryUser(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestAuthenticate_ValidCookie(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	pair, err := svc.GenerateTokenPair(42, "cookie@example.com", "pro")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	var gotClaims *auth.Claims
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := middleware.UserFromContext(r.Context())
+		if !ok {
+			t.Error("UserFromContext() returned false")
+		}
+
+		gotClaims = claims
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.Authenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: pair.AccessToken})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if gotClaims == nil {
+		t.Fatal("claims should not be nil")
+	}
+
+	if gotClaims.UserID != 42 {
+		t.Errorf("UserID = %d; want 42", gotClaims.UserID)
+	}
+
+	if gotClaims.Email != "cookie@example.com" {
+		t.Errorf("Email = %q; want %q", gotClaims.Email, "cookie@example.com")
+	}
+
+	if gotClaims.Tier != "pro" {
+		t.Errorf("Tier = %q; want %q", gotClaims.Tier, "pro")
+	}
+}
+
+func TestAuthenticate_CookieTakesPrecedenceOverHeader(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	cookiePair, err := svc.GenerateTokenPair(1, "cookie-user@example.com", "pro")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	headerPair, err := svc.GenerateTokenPair(2, "header-user@example.com", "free")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	var gotClaims *auth.Claims
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := middleware.UserFromContext(r.Context())
+		if !ok {
+			t.Error("UserFromContext() returned false")
+		}
+
+		gotClaims = claims
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.Authenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: cookiePair.AccessToken})
+	req.Header.Set("Authorization", "Bearer "+headerPair.AccessToken)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if gotClaims == nil {
+		t.Fatal("claims should not be nil")
+	}
+
+	if gotClaims.UserID != 1 {
+		t.Errorf("UserID = %d; want 1 (cookie user)", gotClaims.UserID)
+	}
+
+	if gotClaims.Email != "cookie-user@example.com" {
+		t.Errorf("Email = %q; want %q", gotClaims.Email, "cookie-user@example.com")
+	}
+}
+
+func TestOptionalAuthenticate_ValidCookie(t *testing.T) {
+	t.Parallel()
+
+	svc := testAuthService(t)
+
+	pair, err := svc.GenerateTokenPair(42, "cookie@example.com", "pro")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	var gotClaims *auth.Claims
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := middleware.UserFromContext(r.Context())
+		if !ok {
+			t.Error("UserFromContext() returned false")
+		}
+
+		gotClaims = claims
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.OptionalAuthenticate(svc)(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: pair.AccessToken})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if gotClaims == nil {
+		t.Fatal("claims should not be nil")
+	}
+
+	if gotClaims.UserID != 42 {
+		t.Errorf("UserID = %d; want 42", gotClaims.UserID)
+	}
+
+	if gotClaims.Email != "cookie@example.com" {
+		t.Errorf("Email = %q; want %q", gotClaims.Email, "cookie@example.com")
 	}
 }
