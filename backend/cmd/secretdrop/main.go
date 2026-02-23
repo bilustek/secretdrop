@@ -189,6 +189,7 @@ func Run() error {
 	mux.HandleFunc("GET /auth/github", authSvc.HandleGithubLogin(githubCfg))
 	mux.HandleFunc("GET /auth/github/callback", authSvc.HandleGithubCallback(githubCfg, userRepo))
 	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
+	mux.HandleFunc("POST /auth/refresh", authSvc.HandleRefresh(userRepo))
 
 	// Billing routes (conditional — only in non-dev mode)
 	billingSvc, billingErr := setupBilling(mux, cfg, userRepo, subscriptionNotifier)
