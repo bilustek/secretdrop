@@ -192,8 +192,17 @@ func Run() error {
 
 	mux.HandleFunc("GET /auth/google", authSvc.HandleGoogleLogin(googleCfg))
 	mux.HandleFunc("GET /auth/google/callback", authSvc.HandleGoogleCallback(googleCfg, userRepo))
+
+	if cfg.GoogleClientID() != "" {
+		slog.Info("google sign-in enabled")
+	}
+
 	mux.HandleFunc("GET /auth/github", authSvc.HandleGithubLogin(githubCfg))
 	mux.HandleFunc("GET /auth/github/callback", authSvc.HandleGithubCallback(githubCfg, userRepo))
+
+	if cfg.GithubClientID() != "" {
+		slog.Info("github sign-in enabled")
+	}
 
 	// Apple Sign-In (conditional — only when credentials are configured)
 	if cfg.AppleClientID() != "" {
@@ -321,15 +330,30 @@ func setupBilling(
 		return nil, nil
 	}
 
+	billingOpts := []billing.Option{
+		billing.WithSuccessURL(cfg.FrontendBaseURL() + "/billing/success"),
+		billing.WithCancelURL(cfg.FrontendBaseURL() + "/billing/cancel"),
+		billing.WithPortalReturnURL(cfg.FrontendBaseURL() + "/dashboard"),
+		billing.WithNotifier(notifier),
+	}
+
+	if cfg.StripeProjectMetaKey() != "" && cfg.StripeProjectMetaValue() != "" {
+		billingOpts = append(billingOpts, billing.WithProjectMetadata(
+			cfg.StripeProjectMetaKey(), cfg.StripeProjectMetaValue(),
+		))
+
+		slog.Info("stripe project metadata filtering enabled",
+			"key", cfg.StripeProjectMetaKey(),
+			"value", cfg.StripeProjectMetaValue(),
+		)
+	}
+
 	billingSvc, err := billing.New(
 		cfg.StripeSecretKey(),
 		cfg.StripeWebhookSecret(),
 		cfg.StripePriceID(),
 		userRepo,
-		billing.WithSuccessURL(cfg.FrontendBaseURL()+"/billing/success"),
-		billing.WithCancelURL(cfg.FrontendBaseURL()+"/billing/cancel"),
-		billing.WithPortalReturnURL(cfg.FrontendBaseURL()+"/dashboard"),
-		billing.WithNotifier(notifier),
+		billingOpts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create billing service: %w", err)

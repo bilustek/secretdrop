@@ -56,6 +56,9 @@ type Config struct {
 	appleTeamID     string
 	appleKeyID      string
 	applePrivateKey string
+
+	stripeProjectMetaKey   string
+	stripeProjectMetaValue string
 }
 
 // Option configures a Config value.
@@ -284,6 +287,12 @@ func (c *Config) AppleKeyID() string { return c.appleKeyID }
 // ApplePrivateKey returns the Apple Sign-In private key in PEM format.
 func (c *Config) ApplePrivateKey() string { return c.applePrivateKey }
 
+// StripeProjectMetaKey returns the Stripe metadata key for project filtering.
+func (c *Config) StripeProjectMetaKey() string { return c.stripeProjectMetaKey }
+
+// StripeProjectMetaValue returns the Stripe metadata value for project filtering.
+func (c *Config) StripeProjectMetaValue() string { return c.stripeProjectMetaValue }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -351,6 +360,9 @@ func Load(opts ...Option) (*Config, error) {
 	c.appleTeamID = os.Getenv("APPLE_TEAM_ID")
 	c.appleKeyID = os.Getenv("APPLE_KEY_ID")
 	c.applePrivateKey = os.Getenv("APPLE_PRIVATE_KEY")
+
+	c.stripeProjectMetaKey = os.Getenv("STRIPE_PROJECT_METAKEY")
+	c.stripeProjectMetaValue = os.Getenv("STRIPE_PROJECT_METADATA")
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {

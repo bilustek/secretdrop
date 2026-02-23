@@ -22,6 +22,7 @@ func clearAllEnvVars(t *testing.T) {
 		"ADMIN_USERNAME", "ADMIN_PASSWORD",
 		"SENTRY_DSN", "SENTRY_TRACES_SAMPLE_RATE",
 		"APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY",
+		"STRIPE_PROJECT_METAKEY", "STRIPE_PROJECT_METADATA",
 	} {
 		t.Setenv(key, "")
 	}
@@ -757,5 +758,43 @@ func TestAppleConfigFromEnvVars(t *testing.T) {
 
 	if cfg.ApplePrivateKey() != "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----" {
 		t.Errorf("ApplePrivateKey() = %q; want PEM key", cfg.ApplePrivateKey())
+	}
+}
+
+func TestStripeProjectMetadata(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+	t.Setenv("STRIPE_PROJECT_METAKEY", "project")
+	t.Setenv("STRIPE_PROJECT_METADATA", "secretdrop")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.StripeProjectMetaKey() != "project" {
+		t.Errorf("StripeProjectMetaKey() = %q; want %q", cfg.StripeProjectMetaKey(), "project")
+	}
+
+	if cfg.StripeProjectMetaValue() != "secretdrop" {
+		t.Errorf("StripeProjectMetaValue() = %q; want %q", cfg.StripeProjectMetaValue(), "secretdrop")
+	}
+}
+
+func TestStripeProjectMetadata_Empty(t *testing.T) {
+	clearAllEnvVars(t)
+	t.Setenv("GOLANG_ENV", "development")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.StripeProjectMetaKey() != "" {
+		t.Errorf("StripeProjectMetaKey() = %q; want empty", cfg.StripeProjectMetaKey())
+	}
+
+	if cfg.StripeProjectMetaValue() != "" {
+		t.Errorf("StripeProjectMetaValue() = %q; want empty", cfg.StripeProjectMetaValue())
 	}
 }

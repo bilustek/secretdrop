@@ -91,6 +91,10 @@ export APPLE_PRIVATE_KEY=base64-encoded-p8-private-key
 export SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 export SENTRY_TRACES_SAMPLE_RATE=1.0
 
+# Stripe project filtering (optional — multi-project Stripe account)
+export STRIPE_PROJECT_METAKEY=project
+export STRIPE_PROJECT_METADATA=secretdrop
+
 # Frontend (build-time, passed as Docker build arg)
 # VITE_API_BASE_URL=https://api.secretdrop.us  # empty = same origin
 # VITE_ENABLE_APPLE_SIGNIN=false               # set "false" to hide Apple button
