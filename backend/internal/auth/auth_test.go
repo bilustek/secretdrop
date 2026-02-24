@@ -550,6 +550,66 @@ func TestService_SetAuthCookies(t *testing.T) {
 	}
 }
 
+func TestRedirectWithTokens(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret-key-at-least-32chars!!", auth.WithFrontendBaseURL("http://localhost:3000"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	pair, err := svc.GenerateTokenPair(1, "test@example.com", "free")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	rec := httptest.NewRecorder()
+
+	svc.RedirectWithTokens(rec, req, pair)
+
+	// Verify: 303 See Other status.
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	// Verify: Location header points to frontend callback.
+	location := rec.Header().Get("Location")
+	if location != "http://localhost:3000/auth/callback" {
+		t.Errorf("Location = %q; want %q", location, "http://localhost:3000/auth/callback")
+	}
+
+	// Verify: auth cookies are set.
+	cookies := rec.Result().Cookies()
+	cookieMap := make(map[string]*http.Cookie)
+
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	ac, ok := cookieMap[auth.CookieAccessToken]
+	if !ok {
+		t.Fatal("access_token cookie not set")
+	}
+
+	if ac.Value == "" {
+		t.Error("access_token cookie value is empty")
+	}
+
+	rc, ok := cookieMap[auth.CookieRefreshToken]
+	if !ok {
+		t.Fatal("refresh_token cookie not set")
+	}
+
+	if rc.Value == "" {
+		t.Error("refresh_token cookie value is empty")
+	}
+
+	if _, ok := cookieMap[auth.CookieCSRFToken]; !ok {
+		t.Fatal("csrf_token cookie not set")
+	}
+}
+
 func TestHandleLogout(t *testing.T) {
 	t.Parallel()
 

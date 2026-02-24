@@ -79,6 +79,70 @@ func TestSecurityHeaders_CSP(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders_DocsCSP(t *testing.T) {
+	t.Parallel()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.SecurityHeaders()(inner)
+
+	tests := []struct {
+		name           string
+		path           string
+		wantCDN        bool
+		wantObjectNone bool
+	}{
+		{
+			name:           "docs path gets CDN CSP",
+			path:           "/docs",
+			wantCDN:        true,
+			wantObjectNone: true,
+		},
+		{
+			name:           "docs subpath gets CDN CSP",
+			path:           "/docs/index.html",
+			wantCDN:        true,
+			wantObjectNone: true,
+		},
+		{
+			name:           "api path gets default CSP",
+			path:           "/api/test",
+			wantCDN:        false,
+			wantObjectNone: true,
+		},
+		{
+			name:           "root path gets default CSP",
+			path:           "/",
+			wantCDN:        false,
+			wantObjectNone: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			csp := rec.Header().Get("Content-Security-Policy")
+
+			hasCDN := strings.Contains(csp, "cdn.jsdelivr.net")
+			if hasCDN != tt.wantCDN {
+				t.Errorf("path %q: CSP contains cdn.jsdelivr.net = %v; want %v\nCSP: %s", tt.path, hasCDN, tt.wantCDN, csp)
+			}
+
+			if tt.wantObjectNone && !strings.Contains(csp, "object-src 'none'") {
+				t.Errorf("path %q: CSP missing object-src 'none'\nCSP: %s", tt.path, csp)
+			}
+		})
+	}
+}
+
 func TestSecurityHeaders_PassesThrough(t *testing.T) {
 	t.Parallel()
 
