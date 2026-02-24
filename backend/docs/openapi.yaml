@@ -19,7 +19,7 @@ info:
 
     Most endpoints require a JWT Bearer token obtained via OAuth login
     (Google or GitHub). Tokens are short-lived (15 min access, 30 day refresh).
-  version: "0.3.11"
+  version: "0.3.12"
   contact:
     name: Bilus Teknoloji
     url: https://github.com/bilusteknoloji/secretdrop
@@ -883,7 +883,7 @@ paths:
                     example: "ok"
                   version:
                     type: string
-                    example: "0.3.11"
+                    example: "0.3.12"
 
 components:
   securitySchemes:
