@@ -31,7 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUser])
 
   const logout = useCallback(async () => {
-    await api.logout()
+    try {
+      await api.logout()
+    } catch {
+      // If logout fails server-side, clear client state anyway —
+      // user explicitly requested sign-out.
+    }
+
     setUser(null)
   }, [])
 

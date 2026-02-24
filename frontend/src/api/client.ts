@@ -204,5 +204,7 @@ export const api = {
   logout: () =>
     authenticatedFetch(`${API_URL}/auth/logout`, {
       method: "POST",
+    }).then((r) => {
+      if (!r.ok) throw new Error("Failed to logout")
     }),
 }
