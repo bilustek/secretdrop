@@ -21,27 +21,23 @@ export class AppError extends Error {
   }
 }
 
-// Mutex to prevent concurrent refresh attempts.
+function getCSRFToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : ""
+}
+
 let refreshPromise: Promise<boolean> | null = null
 
 async function refreshTokens(): Promise<boolean> {
-  const refreshToken = localStorage.getItem("refresh_token")
-  if (!refreshToken) return false
-
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: "include",
+      body: JSON.stringify({}),
     })
 
-    if (!res.ok) return false
-
-    const pair = (await res.json()) as { access_token: string; refresh_token: string }
-    localStorage.setItem("access_token", pair.access_token)
-    localStorage.setItem("refresh_token", pair.refresh_token)
-
-    return true
+    return res.ok
   } catch {
     return false
   }
@@ -58,8 +54,6 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 function forceLogout(): never {
-  localStorage.removeItem("access_token")
-  localStorage.removeItem("refresh_token")
   window.location.href = "/"
   throw new AppError("unauthorized", "Session expired", 401)
 }
@@ -76,26 +70,34 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem("access_token")
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) ?? {}),
   }
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
+  const method = (options.method ?? "GET").toUpperCase()
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    const csrf = getCSRFToken()
+    if (csrf) {
+      headers["X-CSRF-Token"] = csrf
+    }
   }
 
-  const res = await fetch(url, { ...options, headers })
+  const res = await fetch(url, { ...options, headers, credentials: "include" })
 
   if (res.status === 401) {
     const refreshed = await tryRefresh()
     if (refreshed) {
-      const newToken = localStorage.getItem("access_token")
-      headers["Authorization"] = `Bearer ${newToken}`
+      // After refresh, CSRF token cookie may have changed
+      const newMethod = (options.method ?? "GET").toUpperCase()
+      if (newMethod !== "GET" && newMethod !== "HEAD" && newMethod !== "OPTIONS") {
+        const newCsrf = getCSRFToken()
+        if (newCsrf) {
+          headers["X-CSRF-Token"] = newCsrf
+        }
+      }
 
-      return fetch(url, { ...options, headers })
+      return fetch(url, { ...options, headers, credentials: "include" })
     }
 
     forceLogout()
@@ -143,8 +145,32 @@ export interface CheckoutResponse {
   url: string
 }
 
+async function softAuthFetch<T>(path: string): Promise<T> {
+  const url = `${API_BASE}${path}`
+  const opts: RequestInit = {
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  }
+
+  let res = await fetch(url, opts)
+
+  if (res.status === 401) {
+    const refreshed = await tryRefresh()
+    if (refreshed) {
+      res = await fetch(url, opts)
+    }
+  }
+
+  if (!res.ok) {
+    const body: ApiError = await res.json()
+    throw new AppError(body.error.type, body.error.message, res.status)
+  }
+
+  return res.json() as Promise<T>
+}
+
 export const api = {
-  me: () => request<MeResponse>("/me"),
+  me: () => softAuthFetch<MeResponse>("/me"),
 
   createSecret: (data: CreateSecretRequest) =>
     request<CreateSecretResponse>("/secrets", {
@@ -173,5 +199,12 @@ export const api = {
       method: "DELETE",
     }).then((r) => {
       if (!r.ok) throw new Error("Failed to delete account")
+    }),
+
+  logout: () =>
+    authenticatedFetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+    }).then((r) => {
+      if (!r.ok) throw new Error("Failed to logout")
     }),
 }

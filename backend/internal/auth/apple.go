@@ -389,6 +389,6 @@ func (s *Service) HandleAppleCallback(cfg *oauth2.Config, userRepo user.Reposito
 			return
 		}
 
-		s.redirectWithTokens(w, r, pair)
+		s.RedirectWithTokens(w, r, pair)
 	}
 }

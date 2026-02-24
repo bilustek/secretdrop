@@ -515,6 +515,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/logout:
+    post:
+      operationId: authLogout
+      summary: Clear auth cookies (logout)
+      description: |
+        Clears the httpOnly authentication cookies (access_token, refresh_token,
+        csrf_token) and returns 200. No request body required. The browser will
+        stop sending credentials on subsequent requests.
+      responses:
+        "200":
+          description: Cookies cleared
+
   /billing/checkout:
     post:
       operationId: billingCheckout

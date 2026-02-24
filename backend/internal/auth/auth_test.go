@@ -1,6 +1,9 @@
 package auth_test
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -402,5 +405,266 @@ func TestNew_WithGoogleClientID(t *testing.T) {
 
 	if svc == nil {
 		t.Fatal("New() returned nil service")
+	}
+}
+
+func TestNew_WithSecureCookies(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		secure bool
+	}{
+		{"enabled", true},
+		{"disabled", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, err := auth.New("test-secret", auth.WithSecureCookies(tt.secure))
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			if svc.SecureCookies() != tt.secure {
+				t.Errorf("SecureCookies() = %v; want %v", svc.SecureCookies(), tt.secure)
+			}
+		})
+	}
+}
+
+func TestService_SecureCookies_Default(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.SecureCookies() {
+		t.Error("SecureCookies() default should be false")
+	}
+}
+
+func TestService_AccessExpiry(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret", auth.WithAccessExpiry(5*time.Minute))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.AccessExpiry() != 5*time.Minute {
+		t.Errorf("AccessExpiry() = %v; want %v", svc.AccessExpiry(), 5*time.Minute)
+	}
+}
+
+func TestService_RefreshExpiry(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret", auth.WithRefreshExpiry(7*24*time.Hour))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.RefreshExpiry() != 7*24*time.Hour {
+		t.Errorf("RefreshExpiry() = %v; want %v", svc.RefreshExpiry(), 7*24*time.Hour)
+	}
+}
+
+func TestService_SetAuthCookies(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret",
+		auth.WithSecureCookies(true),
+		auth.WithAccessExpiry(15*time.Minute),
+		auth.WithRefreshExpiry(30*24*time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	pair := &auth.TokenPair{
+		AccessToken:  "test-access",
+		RefreshToken: "test-refresh",
+	}
+
+	rec := httptest.NewRecorder()
+
+	if err := svc.SetAuthCookies(rec, pair); err != nil {
+		t.Fatalf("SetAuthCookies() error = %v", err)
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 3 {
+		t.Fatalf("cookie count = %d; want 3", len(cookies))
+	}
+
+	cookieMap := make(map[string]*http.Cookie)
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	// Verify access_token cookie.
+	ac, ok := cookieMap[auth.CookieAccessToken]
+	if !ok {
+		t.Fatal("access_token cookie not found")
+	}
+
+	if ac.Value != "test-access" {
+		t.Errorf("access_token value = %q; want %q", ac.Value, "test-access")
+	}
+
+	if !ac.HttpOnly {
+		t.Error("access_token HttpOnly = false; want true")
+	}
+
+	if !ac.Secure {
+		t.Error("access_token Secure = false; want true")
+	}
+
+	// Verify refresh_token cookie.
+	rc, ok := cookieMap[auth.CookieRefreshToken]
+	if !ok {
+		t.Fatal("refresh_token cookie not found")
+	}
+
+	if rc.Value != "test-refresh" {
+		t.Errorf("refresh_token value = %q; want %q", rc.Value, "test-refresh")
+	}
+
+	// Verify csrf_token cookie exists and is non-empty.
+	cc, ok := cookieMap[auth.CookieCSRFToken]
+	if !ok {
+		t.Fatal("csrf_token cookie not found")
+	}
+
+	if cc.Value == "" {
+		t.Error("csrf_token value is empty")
+	}
+
+	if cc.HttpOnly {
+		t.Error("csrf_token HttpOnly = true; want false (readable by JS)")
+	}
+}
+
+func TestRedirectWithTokens(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret-key-at-least-32chars!!", auth.WithFrontendBaseURL("http://localhost:3000"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	pair, err := svc.GenerateTokenPair(1, "test@example.com", "free")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	rec := httptest.NewRecorder()
+
+	svc.RedirectWithTokens(rec, req, pair)
+
+	// Verify: 303 See Other status.
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	// Verify: Location header points to frontend callback.
+	location := rec.Header().Get("Location")
+	if location != "http://localhost:3000/auth/callback" {
+		t.Errorf("Location = %q; want %q", location, "http://localhost:3000/auth/callback")
+	}
+
+	// Verify: auth cookies are set.
+	cookies := rec.Result().Cookies()
+	cookieMap := make(map[string]*http.Cookie)
+
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	ac, ok := cookieMap[auth.CookieAccessToken]
+	if !ok {
+		t.Fatal("access_token cookie not set")
+	}
+
+	if ac.Value == "" {
+		t.Error("access_token cookie value is empty")
+	}
+
+	rc, ok := cookieMap[auth.CookieRefreshToken]
+	if !ok {
+		t.Fatal("refresh_token cookie not set")
+	}
+
+	if rc.Value == "" {
+		t.Error("refresh_token cookie value is empty")
+	}
+
+	if _, ok := cookieMap[auth.CookieCSRFToken]; !ok {
+		t.Fatal("csrf_token cookie not set")
+	}
+}
+
+func TestHandleLogout(t *testing.T) {
+	t.Parallel()
+
+	svc, err := auth.New("test-secret")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	handler := svc.HandleLogout()
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Verify: 200 status.
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	// Verify: JSON body with status "ok".
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body["status"] != "ok" {
+		t.Errorf("status = %q; want %q", body["status"], "ok")
+	}
+
+	// Verify: all three cookies are cleared (MaxAge = -1).
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 3 {
+		t.Fatalf("cookie count = %d; want 3", len(cookies))
+	}
+
+	cookieMap := make(map[string]*http.Cookie)
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	for _, name := range []string{auth.CookieAccessToken, auth.CookieRefreshToken, auth.CookieCSRFToken} {
+		c, ok := cookieMap[name]
+		if !ok {
+			t.Errorf("%s cookie not found", name)
+
+			continue
+		}
+
+		if c.MaxAge != -1 {
+			t.Errorf("%s MaxAge = %d; want -1", name, c.MaxAge)
+		}
+
+		if c.Value != "" {
+			t.Errorf("%s Value = %q; want empty", name, c.Value)
+		}
 	}
 }

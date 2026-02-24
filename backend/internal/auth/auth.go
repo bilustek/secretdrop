@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,6 +36,7 @@ type Service struct {
 	secret          []byte
 	accessExpiry    time.Duration
 	refreshExpiry   time.Duration
+	secureCookies   bool
 	googleClientID  string
 	frontendBaseURL string
 	appleClientID   string
@@ -87,6 +89,48 @@ func WithRefreshExpiry(d time.Duration) Option {
 		s.refreshExpiry = d
 
 		return nil
+	}
+}
+
+// WithSecureCookies controls the Secure flag on auth cookies.
+func WithSecureCookies(secure bool) Option {
+	return func(s *Service) error {
+		s.secureCookies = secure
+
+		return nil
+	}
+}
+
+// SecureCookies returns whether auth cookies should have the Secure flag set.
+func (s *Service) SecureCookies() bool { return s.secureCookies }
+
+// AccessExpiry returns the access token expiry duration.
+func (s *Service) AccessExpiry() time.Duration { return s.accessExpiry }
+
+// RefreshExpiry returns the refresh token expiry duration.
+func (s *Service) RefreshExpiry() time.Duration { return s.refreshExpiry }
+
+// SetAuthCookies generates a CSRF token and writes access, refresh, and CSRF
+// cookies to the response.
+func (s *Service) SetAuthCookies(w http.ResponseWriter, pair *TokenPair) error {
+	csrfToken, err := GenerateCSRFToken()
+	if err != nil {
+		return fmt.Errorf("set auth cookies: %w", err)
+	}
+
+	domain := CookieDomain(s.frontendBaseURL)
+	SetTokenCookies(w, pair, csrfToken, s.secureCookies, domain, s.accessExpiry, s.refreshExpiry)
+
+	return nil
+}
+
+// HandleLogout clears all auth cookies.
+func (s *Service) HandleLogout() http.HandlerFunc {
+	domain := CookieDomain(s.frontendBaseURL)
+
+	return func(w http.ResponseWriter, _ *http.Request) {
+		ClearTokenCookies(w, domain)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }
 

@@ -131,6 +131,7 @@ func Run() error {
 	authSvc, err := auth.New(jwtSecret,
 		auth.WithGoogleClientID(cfg.GoogleClientID()),
 		auth.WithFrontendBaseURL(cfg.FrontendBaseURL()),
+		auth.WithSecureCookies(!cfg.IsDev()),
 		auth.WithAppleCredentials(
 			cfg.AppleClientID(),
 			cfg.AppleTeamID(),
@@ -219,6 +220,7 @@ func Run() error {
 
 	mux.HandleFunc("POST /auth/token", authSvc.HandleTokenExchange(userRepo))
 	mux.HandleFunc("POST /auth/refresh", authSvc.HandleRefresh(userRepo))
+	mux.HandleFunc("POST /auth/logout", authSvc.HandleLogout())
 
 	// Billing routes (conditional — only in non-dev mode)
 	billingSvc, billingErr := setupBilling(mux, cfg, userRepo, subscriptionNotifier)
@@ -253,11 +255,16 @@ func Run() error {
 	}
 
 	var chain http.Handler = mux
-	chain = middleware.RequireJSON(chain, "/auth/apple/callback")
+	chain = middleware.RequireJSON(chain, "/auth/apple/callback", "/billing/webhook")
+	chain = middleware.CSRF(
+		"/billing/webhook", "/auth/apple/callback",
+		"/auth/token", "/auth/refresh",
+		"/api/v1/secrets/", "/api/v1/contact",
+	)(chain)
 	chain = middleware.OptionalAuthenticate(authSvc)(chain)
+	chain = middleware.SecurityHeaders()(chain)
 	chain = middleware.Logging(chain)
 	chain = middleware.RequestID(chain)
-
 	chain = middleware.CORS(cfg.FrontendBaseURL())(chain)
 
 	if cfg.SentryDSN() != "" {

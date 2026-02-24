@@ -224,12 +224,12 @@ func TestHandleGoogleCallback_Success(t *testing.T) { //nolint:paralleltest // m
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	// Verify: Response 307 redirect
+	// Verify: Response 303 See Other redirect
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d; want %d; body = %s", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 
-	// Verify: Location header contains frontend callback with tokens
+	// Verify: Location header points to frontend callback WITHOUT query params
 	location := rec.Header().Get("Location")
 	if location == "" {
 		t.Fatal("Location header is empty")
@@ -244,12 +244,33 @@ func TestHandleGoogleCallback_Success(t *testing.T) { //nolint:paralleltest // m
 		t.Errorf("redirect path = %q; want %q", locURL.Path, "/auth/callback")
 	}
 
-	if locURL.Query().Get("access_token") == "" {
-		t.Error("access_token missing from redirect URL")
+	// Tokens should NOT be in the URL anymore.
+	if locURL.Query().Get("access_token") != "" {
+		t.Error("access_token should not be in redirect URL query params")
 	}
 
-	if locURL.Query().Get("refresh_token") == "" {
-		t.Error("refresh_token missing from redirect URL")
+	if locURL.Query().Get("refresh_token") != "" {
+		t.Error("refresh_token should not be in redirect URL query params")
+	}
+
+	// Verify: auth cookies are set instead.
+	cookies := rec.Result().Cookies()
+	cookieMap := make(map[string]*http.Cookie)
+
+	for _, c := range cookies {
+		cookieMap[c.Name] = c
+	}
+
+	if _, ok := cookieMap[auth.CookieAccessToken]; !ok {
+		t.Error("access_token cookie not set")
+	}
+
+	if _, ok := cookieMap[auth.CookieRefreshToken]; !ok {
+		t.Error("refresh_token cookie not set")
+	}
+
+	if _, ok := cookieMap[auth.CookieCSRFToken]; !ok {
+		t.Error("csrf_token cookie not set")
 	}
 }
 
