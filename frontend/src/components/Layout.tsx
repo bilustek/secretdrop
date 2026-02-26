@@ -111,6 +111,7 @@ export function Layout() {
                         <LogOut size={16} />
                         Sign Out
                       </button>
+                      <div className="my-1 border-t border-gray-200 dark:border-gray-800" />
                       <button
                         type="button"
                         onClick={() => {
