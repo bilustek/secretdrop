@@ -14,9 +14,19 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button type="button" onClick={handleCopy} className="p-1 hover:text-gray-600 dark:hover:text-gray-300">
-      {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-    </button>
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="p-1.5 rounded-md hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-150 hover:scale-110"
+      >
+        {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+      </button>
+      <div className="absolute bottom-full right-0 mb-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 dark:bg-white dark:text-gray-900 rounded-lg shadow-lg whitespace-nowrap opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-150">
+        {copied ? "Copied!" : "Copy the link & share it with your friend"}
+        <div className="absolute top-full right-3 -mt-px border-4 border-transparent border-t-gray-900 dark:border-t-white" />
+      </div>
+    </div>
   )
 }
 
