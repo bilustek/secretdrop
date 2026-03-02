@@ -31,6 +31,7 @@ type MeResponse struct {
 	RecipientsLimit int    `json:"recipients_limit"`
 	MaxTextLength   int    `json:"max_text_length"`
 	DefaultExpiry   string `json:"default_expiry"`
+	Timezone        string `json:"timezone"`
 }
 
 // ErrorResponse is the standard error envelope.
