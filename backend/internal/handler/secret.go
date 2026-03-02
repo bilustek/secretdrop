@@ -86,6 +86,7 @@ func (h *SecretHandler) Me(w http.ResponseWriter, r *http.Request) {
 		SecretsLimit:    u.SecretsLimit(),
 		RecipientsLimit: u.RecipientsLimit(),
 		MaxTextLength:   u.MaxTextLength(),
+		DefaultExpiry:   h.svc.DefaultExpiry(),
 	})
 }
 

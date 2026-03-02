@@ -114,11 +114,13 @@ export interface MeResponse {
   secrets_used: number
   secrets_limit: number
   max_text_length: number
+  default_expiry: string
 }
 
 export interface CreateSecretRequest {
   text: string
   to: string[]
+  expires_in?: string
 }
 
 export interface RecipientLink {

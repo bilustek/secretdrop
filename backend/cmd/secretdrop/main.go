@@ -163,6 +163,7 @@ func Run() error {
 		service.WithBaseURL(cfg.FrontendBaseURL()),
 		service.WithFromEmail(cfg.FromEmail()),
 		service.WithExpiry(cfg.SecretExpiry()),
+		service.WithDefaultExpiry(cfg.SecretExpiryRaw()),
 		service.WithUserRepo(userRepo),
 	)
 	if err != nil {

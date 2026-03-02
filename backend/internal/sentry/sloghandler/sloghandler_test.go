@@ -29,10 +29,12 @@ func (h *captureHandler) WithGroup(_ string) slog.Handler      { return h }
 // errorHandler always returns an error from Handle.
 type errorHandler struct{}
 
-func (h *errorHandler) Enabled(_ context.Context, _ slog.Level) bool        { return true }
-func (h *errorHandler) Handle(_ context.Context, _ slog.Record) error       { return errors.New("inner error") }
-func (h *errorHandler) WithAttrs(_ []slog.Attr) slog.Handler                { return h }
-func (h *errorHandler) WithGroup(_ string) slog.Handler                     { return h }
+func (h *errorHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+func (h *errorHandler) Handle(_ context.Context, _ slog.Record) error {
+	return errors.New("inner error")
+}
+func (h *errorHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *errorHandler) WithGroup(_ string) slog.Handler      { return h }
 
 func TestErrorLevelDelegatesToInner(t *testing.T) {
 	t.Parallel()

@@ -21,14 +21,25 @@ import (
 
 const defaultExpiry = 10 * time.Minute
 
+// AllowedExpiries maps user-facing expiry values to durations.
+var AllowedExpiries = map[string]time.Duration{
+	"10m": 10 * time.Minute,
+	"1h":  1 * time.Hour,
+	"1d":  24 * time.Hour,
+	"5d":  5 * 24 * time.Hour,
+	"10d": 10 * 24 * time.Hour,
+	"30d": 30 * 24 * time.Hour,
+}
+
 // SecretService implements the core business logic for creating and revealing secrets.
 type SecretService struct {
-	repo      repository.Repository
-	sender    email.Sender
-	userRepo  user.Repository
-	baseURL   string
-	fromEmail string
-	expiry    time.Duration
+	repo          repository.Repository
+	sender        email.Sender
+	userRepo      user.Repository
+	baseURL       string
+	fromEmail     string
+	expiry        time.Duration
+	defaultExpiry string
 }
 
 // Option configures a SecretService value.
@@ -73,6 +84,15 @@ func WithExpiry(d time.Duration) Option {
 	}
 }
 
+// WithDefaultExpiry sets the default expiry label returned to clients (e.g. "10m").
+func WithDefaultExpiry(raw string) Option {
+	return func(s *SecretService) error {
+		s.defaultExpiry = raw
+
+		return nil
+	}
+}
+
 // WithUserRepo sets the user repository for usage limit enforcement.
 func WithUserRepo(r user.Repository) Option {
 	return func(s *SecretService) error {
@@ -80,6 +100,15 @@ func WithUserRepo(r user.Repository) Option {
 
 		return nil
 	}
+}
+
+// DefaultExpiry returns the default expiry label for clients (e.g. "10m").
+func (s *SecretService) DefaultExpiry() string {
+	if s.defaultExpiry != "" {
+		return s.defaultExpiry
+	}
+
+	return "10m"
 }
 
 // New creates a new SecretService with the given repository and email sender.
@@ -140,8 +169,13 @@ func (s *SecretService) Create(
 		return nil, err
 	}
 
+	expiry := s.expiry
+	if req.ExpiresIn != "" {
+		expiry = AllowedExpiries[req.ExpiresIn]
+	}
+
 	batchID := uuid.New().String()
-	expiresAt := time.Now().Add(s.expiry).UTC()
+	expiresAt := time.Now().Add(expiry).UTC()
 	recipients := make([]model.RecipientLink, 0, len(req.To))
 
 	var senderName string
@@ -299,6 +333,16 @@ func (s *SecretService) createForRecipient(
 }
 
 func validateCreateRequest(req *model.CreateRequest, maxRecipients, maxTextLength int) error {
+	if req.ExpiresIn != "" {
+		if _, ok := AllowedExpiries[req.ExpiresIn]; !ok {
+			return &model.AppError{
+				Type:       "validation_error",
+				Message:    "Invalid expiry value",
+				StatusCode: model.StatusUnprocessableEntity,
+			}
+		}
+	}
+
 	if len(req.Text) == 0 {
 		return &model.AppError{
 			Type:       "validation_error",

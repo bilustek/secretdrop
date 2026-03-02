@@ -479,6 +479,74 @@ func TestCreate_IncrementsUsage(t *testing.T) {
 	}
 }
 
+func TestCreate_WithExpiresIn(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
+		Text:      "secret-with-expiry",
+		To:        []string{"alice@example.com"},
+		ExpiresIn: "1d",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// ExpiresAt should be ~24h from now, not 10m
+	expectedMin := time.Now().Add(23 * time.Hour)
+	if resp.ExpiresAt.Before(expectedMin) {
+		t.Errorf("ExpiresAt = %v; expected at least ~24h from now", resp.ExpiresAt)
+	}
+}
+
+func TestCreate_WithInvalidExpiresIn(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, 0, &model.CreateRequest{
+		Text:      "secret",
+		To:        []string{"alice@example.com"},
+		ExpiresIn: "99h",
+	})
+	if err == nil {
+		t.Fatal("Create() should return error for invalid expires_in")
+	}
+
+	appErr, ok := err.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", err)
+	}
+
+	if appErr.Type != "validation_error" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "validation_error")
+	}
+}
+
+func TestCreate_WithEmptyExpiresIn(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
+		Text: "secret-default-expiry",
+		To:   []string{"alice@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// ExpiresAt should be ~10m from now (default)
+	expectedMax := time.Now().Add(11 * time.Minute)
+	if resp.ExpiresAt.After(expectedMax) {
+		t.Errorf("ExpiresAt = %v; expected around 10m from now", resp.ExpiresAt)
+	}
+}
+
 func TestCreate_FreeUserRecipientLimit(t *testing.T) {
 	t.Parallel()
 

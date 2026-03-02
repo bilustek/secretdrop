@@ -916,6 +916,18 @@ components:
             format: email
           minItems: 1
           maxItems: 5
+        expires_in:
+          type: string
+          enum:
+            - "10m"
+            - "1h"
+            - "1d"
+            - "5d"
+            - "10d"
+            - "30d"
+          description: >-
+            How long the secret should live before expiring.
+            Defaults to the server's SECRET_EXPIRY setting (usually 10m).
 
     CreateResponse:
       type: object
@@ -989,6 +1001,16 @@ components:
         max_text_length:
           type: integer
           description: Maximum secret text length in characters (free 4096, pro 65536)
+        default_expiry:
+          type: string
+          enum:
+            - "10m"
+            - "1h"
+            - "1d"
+            - "5d"
+            - "10d"
+            - "30d"
+          description: Default expiry value from server configuration (used to pre-select in UI)
 
     TokenPair:
       type: object
