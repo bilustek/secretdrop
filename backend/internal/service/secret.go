@@ -188,6 +188,9 @@ func (s *SecretService) Create(
 	maxRecipients := model.ProMaxRecipients
 	maxTextLength := model.ProMaxTextLength
 
+	var senderName string
+	var senderTimezone string
+
 	if s.userRepo != nil {
 		u, err := s.userRepo.FindByID(ctx, userID)
 		if err != nil {
@@ -213,6 +216,8 @@ func (s *SecretService) Create(
 
 		maxRecipients = u.RecipientsLimit()
 		maxTextLength = u.MaxTextLength()
+		senderName = u.Name
+		senderTimezone = u.Timezone
 	}
 
 	if err := validateCreateRequest(req, maxRecipients, maxTextLength); err != nil {
@@ -227,15 +232,6 @@ func (s *SecretService) Create(
 	batchID := uuid.New().String()
 	expiresAt := time.Now().Add(expiry).UTC()
 	recipients := make([]model.RecipientLink, 0, len(req.To))
-
-	var senderName string
-	var senderTimezone string
-	if s.userRepo != nil {
-		if u, err := s.userRepo.FindByID(ctx, userID); err == nil {
-			senderName = u.Name
-			senderTimezone = u.Timezone
-		}
-	}
 
 	for _, recipientEmail := range req.To {
 		link, err := s.createForRecipient(ctx, req.Text, recipientEmail, expiresAt, senderName, senderTimezone)
