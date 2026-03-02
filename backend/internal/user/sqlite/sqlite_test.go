@@ -234,7 +234,11 @@ func TestUpsert_EmptyAvatarPreservesExisting(t *testing.T) {
 	}
 
 	if second.AvatarURL != "https://example.com/frank.png" {
-		t.Errorf("AvatarURL = %q; want %q (should be preserved when empty)", second.AvatarURL, "https://example.com/frank.png")
+		t.Errorf(
+			"AvatarURL = %q; want %q (should be preserved when empty)",
+			second.AvatarURL,
+			"https://example.com/frank.png",
+		)
 	}
 
 	// Non-empty name should still be updated.

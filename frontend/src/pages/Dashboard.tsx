@@ -1,8 +1,17 @@
 import { use, useState, useRef, useEffect, type FormEvent } from "react"
-import { Plus, X, Loader2, Copy, Check, Rocket } from "lucide-react"
+import { Plus, X, Loader2, Copy, Check, Rocket, Clock } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { api, AppError, type CreateSecretResponse } from "../api/client"
 import { useRecentEmails } from "../hooks/useRecentEmails"
+
+const EXPIRY_OPTIONS = [
+  { value: "10m", label: "10 minutes" },
+  { value: "1h", label: "1 hour" },
+  { value: "1d", label: "1 day" },
+  { value: "5d", label: "5 days" },
+  { value: "10d", label: "10 days" },
+  { value: "30d", label: "30 days" },
+]
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -38,6 +47,7 @@ export default function Dashboard() {
   const [result, setResult] = useState<CreateSecretResponse | null>(null)
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [expiresIn, setExpiresIn] = useState("")
   const { addEmails, suggest } = useRecentEmails()
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -59,6 +69,12 @@ export default function Dashboard() {
     if (showSuggestions) document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [showSuggestions])
+
+  useEffect(() => {
+    if (auth?.user?.default_expiry && !expiresIn) {
+      setExpiresIn(auth.user.default_expiry)
+    }
+  }, [auth?.user?.default_expiry, expiresIn])
 
   if (!auth || !auth.user) return null
 
@@ -95,7 +111,7 @@ export default function Dashboard() {
     setIsSubmitting(true)
 
     try {
-      const response = await api.createSecret({ text, to: emails })
+      const response = await api.createSecret({ text, to: emails, expires_in: expiresIn })
       addEmails(emails)
       setResult(response)
       setText("")
@@ -216,6 +232,23 @@ export default function Dashboard() {
             className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white resize-none"
           />
           <p className="text-xs text-gray-400 mt-1 text-right">{text.length.toLocaleString()}/{user.max_text_length.toLocaleString()}</p>
+
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-x-4">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+              <Clock size={14} />
+              Expires after
+            </label>
+            <select
+              value={expiresIn}
+              onChange={(e) => setExpiresIn(e.target.value)}
+              className="w-full sm:w-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+            >
+              {EXPIRY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400">Auto-deleted if not read within this time</p>
+          </div>
 
           <div className="mt-4">
             <label className="text-sm font-medium">Recipients</label>

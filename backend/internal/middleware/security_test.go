@@ -29,8 +29,8 @@ func TestSecurityHeaders(t *testing.T) {
 
 	headers := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "DENY",
-		"Referrer-Policy":       "strict-origin-when-cross-origin",
+		"X-Frame-Options":        "DENY",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
 	}
 
 	for name, want := range headers {
@@ -133,7 +133,13 @@ func TestSecurityHeaders_DocsCSP(t *testing.T) {
 
 			hasCDN := strings.Contains(csp, "cdn.jsdelivr.net")
 			if hasCDN != tt.wantCDN {
-				t.Errorf("path %q: CSP contains cdn.jsdelivr.net = %v; want %v\nCSP: %s", tt.path, hasCDN, tt.wantCDN, csp)
+				t.Errorf(
+					"path %q: CSP contains cdn.jsdelivr.net = %v; want %v\nCSP: %s",
+					tt.path,
+					hasCDN,
+					tt.wantCDN,
+					csp,
+				)
 			}
 
 			if tt.wantObjectNone && !strings.Contains(csp, "object-src 'none'") {

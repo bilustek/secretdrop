@@ -32,6 +32,7 @@ type Config struct {
 	fromEmail       string
 	replyToEmail    string
 	secretExpiry    time.Duration
+	secretExpiryRaw string
 	cleanupInterval time.Duration
 
 	googleClientID      string
@@ -230,6 +231,16 @@ func (c *Config) ReplyToEmail() string { return c.replyToEmail }
 // SecretExpiry returns the secret expiration duration.
 func (c *Config) SecretExpiry() time.Duration { return c.secretExpiry }
 
+// SecretExpiryRaw returns the original SECRET_EXPIRY string (e.g. "10m", "1h").
+// Falls back to "10m" when SECRET_EXPIRY was not set.
+func (c *Config) SecretExpiryRaw() string {
+	if c.secretExpiryRaw != "" {
+		return c.secretExpiryRaw
+	}
+
+	return "10m"
+}
+
 // CleanupInterval returns the cleanup interval duration.
 func (c *Config) CleanupInterval() time.Duration { return c.cleanupInterval }
 
@@ -318,6 +329,7 @@ func Load(opts ...Option) (*Config, error) {
 		}
 
 		c.secretExpiry = d
+		c.secretExpiryRaw = v
 	}
 
 	if v := os.Getenv("CLEANUP_INTERVAL"); v != "" {

@@ -334,6 +334,10 @@ func TestMe_ReturnsUserInfo(t *testing.T) {
 	if resp.SecretsLimit != model.FreeTierLimit {
 		t.Errorf("secrets_limit = %d; want %d", resp.SecretsLimit, model.FreeTierLimit)
 	}
+
+	if resp.DefaultExpiry != "10m" {
+		t.Errorf("default_expiry = %q; want %q", resp.DefaultExpiry, "10m")
+	}
 }
 
 func TestMe_Unauthenticated(t *testing.T) {

@@ -626,7 +626,9 @@ func TestHandleAppleCallback_SuccessWithUserJSON(t *testing.T) { //nolint:parall
 	}
 }
 
-func TestHandleAppleCallback_SuccessWithFirstNameOnly(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleAppleCallback_SuccessWithFirstNameOnly(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	env := newAppleCallbackTestEnv(t)
 	idToken := env.signAppleIDToken(t)
 	tokenResp := env.tokenExchangeResponse(t, idToken)
@@ -776,7 +778,9 @@ func TestHandleAppleCallback_MissingIDToken(t *testing.T) { //nolint:paralleltes
 	}
 }
 
-func TestHandleAppleCallback_IDTokenVerificationFailure(t *testing.T) { //nolint:paralleltest // modifies http.DefaultTransport
+func TestHandleAppleCallback_IDTokenVerificationFailure(
+	t *testing.T,
+) { //nolint:paralleltest // modifies http.DefaultTransport
 	env := newAppleCallbackTestEnv(t)
 
 	// Return a valid token exchange with a garbage id_token
