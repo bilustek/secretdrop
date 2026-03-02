@@ -91,6 +91,10 @@ func (m *webhookUserRepo) UpdateTier(_ context.Context, id int64, tier string) e
 	return m.updateTierErr
 }
 
+func (m *webhookUserRepo) UpdateTimezone(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
 func (m *webhookUserRepo) UpsertSubscription(_ context.Context, sub *model.Subscription) error {
 	m.upsertSubCalled = true
 	m.upsertSubArg = sub

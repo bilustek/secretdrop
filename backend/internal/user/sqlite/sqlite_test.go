@@ -1091,3 +1091,49 @@ func TestUpdateSecretsLimitOverride_NotFound(t *testing.T) {
 		t.Errorf("UpdateSecretsLimitOverride() error = %v; want model.ErrNotFound", err)
 	}
 }
+
+func TestUpdateTimezone(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-tz",
+		Email:      "tz@example.com",
+		Name:       "TZ User",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	if u.Timezone != "UTC" {
+		t.Errorf("Timezone = %q; want %q", u.Timezone, "UTC")
+	}
+
+	if err := repo.UpdateTimezone(ctx, u.ID, "Europe/Istanbul"); err != nil {
+		t.Fatalf("UpdateTimezone() error = %v", err)
+	}
+
+	found, err := repo.FindByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	if found.Timezone != "Europe/Istanbul" {
+		t.Errorf("Timezone = %q; want %q", found.Timezone, "Europe/Istanbul")
+	}
+}
+
+func TestUpdateTimezone_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.UpdateTimezone(ctx, 99999, "Europe/Istanbul")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("UpdateTimezone() error = %v; want model.ErrNotFound", err)
+	}
+}

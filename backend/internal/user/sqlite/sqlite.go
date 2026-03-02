@@ -84,6 +84,7 @@ func New(dsn string) (*Repository, error) {
 
 	// Add secrets_limit column if it doesn't exist (SQLite has no ADD COLUMN IF NOT EXISTS).
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN secrets_limit INTEGER")
+	_, _ = db.Exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
 
 	return &Repository{db: db}, nil
 }
@@ -102,7 +103,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 			avatar_url  = CASE WHEN excluded.avatar_url = '' THEN users.avatar_url ELSE excluded.avatar_url END,
 			updated_at  = CURRENT_TIMESTAMP
 		RETURNING id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
 	`
 
 	result := &model.User{}
@@ -125,6 +126,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 		&result.CreatedAt,
 		&result.UpdatedAt,
 		&result.SecretsLimitOverride,
+		&result.Timezone,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user: %w", err)
@@ -137,7 +139,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error) {
 	const query = `
 		SELECT id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
 		FROM users
 		WHERE id = ?
 	`
@@ -156,6 +158,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
+		&u.Timezone,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -173,7 +176,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 func (r *Repository) FindByProvider(ctx context.Context, provider, providerID string) (*model.User, error) {
 	const query = `
 		SELECT id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
 		FROM users
 		WHERE provider = ? AND provider_id = ?
 	`
@@ -192,6 +195,7 @@ func (r *Repository) FindByProvider(ctx context.Context, provider, providerID st
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
+		&u.Timezone,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -253,6 +257,27 @@ func (r *Repository) UpdateTier(ctx context.Context, id int64, tier string) erro
 	result, err := r.db.ExecContext(ctx, query, tier, id)
 	if err != nil {
 		return fmt.Errorf("update tier: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpdateTimezone updates the timezone for the given user.
+func (r *Repository) UpdateTimezone(ctx context.Context, id int64, timezone string) error {
+	const query = `UPDATE users SET timezone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, timezone, id)
+	if err != nil {
+		return fmt.Errorf("update timezone: %w", err)
 	}
 
 	n, err := result.RowsAffected()
@@ -372,7 +397,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		SELECT u.id, u.provider, u.provider_id,
 			u.email, u.name, u.avatar_url,
 			u.tier, u.secrets_used,
-			u.created_at, u.updated_at, u.secrets_limit
+			u.created_at, u.updated_at, u.secrets_limit, u.timezone
 		FROM users u
 		JOIN subscriptions s ON u.id = s.user_id
 		WHERE s.stripe_customer_id = ?
@@ -392,6 +417,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
+		&u.Timezone,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -471,7 +497,7 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 	q := user.ApplyOptions(opts...)
 
 	query := "SELECT id, provider, provider_id, email, name, avatar_url," +
-		" tier, secrets_used, created_at, updated_at, secrets_limit FROM users"
+		" tier, secrets_used, created_at, updated_at, secrets_limit, timezone FROM users"
 	var args []any
 	var clauses []string
 
@@ -521,6 +547,7 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 			&u.ID, &u.Provider, &u.ProviderID, &u.Email,
 			&u.Name, &u.AvatarURL, &u.Tier, &u.SecretsUsed,
 			&u.CreatedAt, &u.UpdatedAt, &u.SecretsLimitOverride,
+			&u.Timezone,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}

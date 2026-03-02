@@ -73,6 +73,10 @@ func (m *mockUserRepo) UpdateTier(_ context.Context, _ int64, _ string) error {
 	return errors.New("not implemented")
 }
 
+func (m *mockUserRepo) UpdateTimezone(_ context.Context, _ int64, _ string) error {
+	return errors.New("not implemented")
+}
+
 func (m *mockUserRepo) UpsertSubscription(_ context.Context, _ *model.Subscription) error {
 	return errors.New("not implemented")
 }
