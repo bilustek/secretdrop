@@ -89,9 +89,13 @@ func WithExpiry(d time.Duration) Option {
 
 // WithDefaultExpiry sets the default expiry label returned to clients (e.g. "10m").
 // If raw is not a key in AllowedExpiries, the closest allowed value is used.
+// The server-side expiry duration is also aligned to the normalized value so that
+// clients omitting expires_in get the same TTL as the advertised default.
 func WithDefaultExpiry(raw string) Option {
 	return func(s *SecretService) error {
-		s.defaultExpiry = NormalizeExpiry(raw)
+		normalized := NormalizeExpiry(raw)
+		s.defaultExpiry = normalized
+		s.expiry = AllowedExpiries[normalized]
 
 		return nil
 	}
@@ -144,6 +148,9 @@ func WithUserRepo(r user.Repository) Option {
 		return nil
 	}
 }
+
+// Expiry returns the server-side secret expiration duration.
+func (s *SecretService) Expiry() time.Duration { return s.expiry }
 
 // DefaultExpiry returns the default expiry label for clients (e.g. "10m").
 func (s *SecretService) DefaultExpiry() string {

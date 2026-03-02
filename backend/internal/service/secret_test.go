@@ -681,6 +681,34 @@ func TestDefaultExpiry(t *testing.T) {
 			t.Errorf("DefaultExpiry() = %q; want a value from AllowedExpiries", got)
 		}
 	})
+
+	t.Run("aligns server expiry with normalized default", func(t *testing.T) {
+		t.Parallel()
+
+		repo, err := sqlite.New(":memory:")
+		if err != nil {
+			t.Fatalf("sqlite.New() error = %v", err)
+		}
+		t.Cleanup(func() { repo.Close() })
+
+		svc, err := service.New(
+			repo, noop.New(),
+			service.WithBaseURL("http://localhost:3000"),
+			service.WithFromEmail("noreply@test.com"),
+			service.WithExpiry(30*time.Minute),
+			service.WithDefaultExpiry("30m"),
+		)
+		if err != nil {
+			t.Fatalf("service.New() error = %v", err)
+		}
+
+		label := svc.DefaultExpiry()
+		wantDur := service.AllowedExpiries[label]
+
+		if got := svc.Expiry(); got != wantDur {
+			t.Errorf("Expiry() = %v; want %v (matching DefaultExpiry %q)", got, wantDur, label)
+		}
+	})
 }
 
 func TestCreate_ProUserMultipleRecipients(t *testing.T) {
