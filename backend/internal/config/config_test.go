@@ -761,6 +761,37 @@ func TestAppleConfigFromEnvVars(t *testing.T) {
 	}
 }
 
+func TestSecretExpiryRaw(t *testing.T) {
+	t.Run("returns raw value when set", func(t *testing.T) {
+		clearAllEnvVars(t)
+		t.Setenv("GOLANG_ENV", "development")
+		t.Setenv("SECRET_EXPIRY", "30m")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.SecretExpiryRaw() != "30m" {
+			t.Errorf("SecretExpiryRaw() = %q; want %q", cfg.SecretExpiryRaw(), "30m")
+		}
+	})
+
+	t.Run("returns default when not set", func(t *testing.T) {
+		clearAllEnvVars(t)
+		t.Setenv("GOLANG_ENV", "development")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.SecretExpiryRaw() != "10m" {
+			t.Errorf("SecretExpiryRaw() = %q; want %q", cfg.SecretExpiryRaw(), "10m")
+		}
+	})
+}
+
 func TestStripeProjectMetadata(t *testing.T) {
 	clearAllEnvVars(t)
 	t.Setenv("GOLANG_ENV", "development")

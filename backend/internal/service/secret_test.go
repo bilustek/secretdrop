@@ -582,6 +582,135 @@ func TestCreate_FreeUserRecipientLimit(t *testing.T) {
 	}
 }
 
+func TestNormalizeExpiry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "allowed 10m", raw: "10m", want: "10m"},
+		{name: "allowed 1h", raw: "1h", want: "1h"},
+		{name: "allowed 1d", raw: "1d", want: "1d"},
+		{name: "allowed 30d", raw: "30d", want: "30d"},
+		{name: "empty string", raw: "", want: "10m"},
+		{name: "unparseable", raw: "notaduration", want: "10m"},
+		{name: "30m rounds to 10m", raw: "30m", want: "10m"},
+		{name: "45m rounds to 1h", raw: "45m", want: "1h"},
+		{name: "24h maps to 1d", raw: "24h", want: "1d"},
+		{name: "120h maps to 5d", raw: "120h", want: "5d"},
+		{name: "240h maps to 10d", raw: "240h", want: "10d"},
+		{name: "720h maps to 30d", raw: "720h", want: "30d"},
+		{name: "2h rounds to 1h", raw: "2h", want: "1h"},
+		{name: "48h tie-break picks shorter 1d", raw: "48h", want: "1d"},
+		{name: "72h tie-break picks shorter 1d", raw: "72h", want: "1d"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := service.NormalizeExpiry(tt.raw)
+			if got != tt.want {
+				t.Errorf("NormalizeExpiry(%q) = %q; want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultExpiry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns fallback when not set", func(t *testing.T) {
+		t.Parallel()
+
+		svc, _, _ := newTestService(t)
+		if got := svc.DefaultExpiry(); got != "10m" {
+			t.Errorf("DefaultExpiry() = %q; want %q", got, "10m")
+		}
+	})
+
+	t.Run("returns normalized value when set", func(t *testing.T) {
+		t.Parallel()
+
+		repo, err := sqlite.New(":memory:")
+		if err != nil {
+			t.Fatalf("sqlite.New() error = %v", err)
+		}
+		t.Cleanup(func() { repo.Close() })
+
+		svc, err := service.New(
+			repo, noop.New(),
+			service.WithBaseURL("http://localhost:3000"),
+			service.WithFromEmail("noreply@test.com"),
+			service.WithExpiry(10*time.Minute),
+			service.WithDefaultExpiry("1h"),
+		)
+		if err != nil {
+			t.Fatalf("service.New() error = %v", err)
+		}
+
+		if got := svc.DefaultExpiry(); got != "1h" {
+			t.Errorf("DefaultExpiry() = %q; want %q", got, "1h")
+		}
+	})
+
+	t.Run("normalizes non-whitelisted value", func(t *testing.T) {
+		t.Parallel()
+
+		repo, err := sqlite.New(":memory:")
+		if err != nil {
+			t.Fatalf("sqlite.New() error = %v", err)
+		}
+		t.Cleanup(func() { repo.Close() })
+
+		svc, err := service.New(
+			repo, noop.New(),
+			service.WithBaseURL("http://localhost:3000"),
+			service.WithFromEmail("noreply@test.com"),
+			service.WithExpiry(30*time.Minute),
+			service.WithDefaultExpiry("30m"),
+		)
+		if err != nil {
+			t.Fatalf("service.New() error = %v", err)
+		}
+
+		got := svc.DefaultExpiry()
+		if _, ok := service.AllowedExpiries[got]; !ok {
+			t.Errorf("DefaultExpiry() = %q; want a value from AllowedExpiries", got)
+		}
+	})
+
+	t.Run("aligns server expiry with normalized default", func(t *testing.T) {
+		t.Parallel()
+
+		repo, err := sqlite.New(":memory:")
+		if err != nil {
+			t.Fatalf("sqlite.New() error = %v", err)
+		}
+		t.Cleanup(func() { repo.Close() })
+
+		svc, err := service.New(
+			repo, noop.New(),
+			service.WithBaseURL("http://localhost:3000"),
+			service.WithFromEmail("noreply@test.com"),
+			service.WithExpiry(30*time.Minute),
+			service.WithDefaultExpiry("30m"),
+		)
+		if err != nil {
+			t.Fatalf("service.New() error = %v", err)
+		}
+
+		label := svc.DefaultExpiry()
+		wantDur := service.AllowedExpiries[label]
+
+		if got := svc.Expiry(); got != wantDur {
+			t.Errorf("Expiry() = %v; want %v (matching DefaultExpiry %q)", got, wantDur, label)
+		}
+	})
+}
+
 func TestCreate_ProUserMultipleRecipients(t *testing.T) {
 	t.Parallel()
 
