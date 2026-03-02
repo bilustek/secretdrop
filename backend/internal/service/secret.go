@@ -19,7 +19,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultExpiry = 10 * time.Minute
+const (
+	defaultExpiry      = 10 * time.Minute
+	defaultExpiryLabel = "10m"
+)
 
 // AllowedExpiries maps user-facing expiry values to durations.
 var AllowedExpiries = map[string]time.Duration{
@@ -85,12 +88,51 @@ func WithExpiry(d time.Duration) Option {
 }
 
 // WithDefaultExpiry sets the default expiry label returned to clients (e.g. "10m").
+// If raw is not a key in AllowedExpiries, the closest allowed value is used.
 func WithDefaultExpiry(raw string) Option {
 	return func(s *SecretService) error {
-		s.defaultExpiry = raw
+		s.defaultExpiry = NormalizeExpiry(raw)
 
 		return nil
 	}
+}
+
+// NormalizeExpiry returns raw unchanged when it is a key in AllowedExpiries.
+// Otherwise it parses raw as a Go duration and picks the closest allowed key.
+// Falls back to "10m" when raw is empty or unparseable.
+func NormalizeExpiry(raw string) string {
+	if raw == "" {
+		return defaultExpiryLabel
+	}
+
+	if _, ok := AllowedExpiries[raw]; ok {
+		return raw
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return defaultExpiryLabel
+	}
+
+	bestKey := "10m"
+	bestDiff := abs(d - AllowedExpiries[bestKey])
+
+	for key, dur := range AllowedExpiries {
+		if diff := abs(d - dur); diff < bestDiff {
+			bestKey = key
+			bestDiff = diff
+		}
+	}
+
+	return bestKey
+}
+
+func abs(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+
+	return d
 }
 
 // WithUserRepo sets the user repository for usage limit enforcement.
@@ -108,7 +150,7 @@ func (s *SecretService) DefaultExpiry() string {
 		return s.defaultExpiry
 	}
 
-	return "10m"
+	return defaultExpiryLabel
 }
 
 // New creates a new SecretService with the given repository and email sender.
