@@ -450,9 +450,12 @@ func BuildNotificationEmail(senderName, link string, expiresAt time.Time, sender
 	if senderTimezone != "" && senderTimezone != "UTC" {
 		loc, err := time.LoadLocation(senderTimezone)
 		if err == nil {
-			local := expiresAt.In(loc).Format("Jan 2, 2006 at 3:04 PM MST")
-			utc := expiresAt.UTC().Format("3:04 PM UTC")
-			expiry = local + " (" + utc + ")"
+			zoneName, _ := expiresAt.In(loc).Zone()
+			if zoneName != "UTC" {
+				local := expiresAt.In(loc).Format("Jan 2, 2006 at 3:04 PM MST")
+				utc := expiresAt.UTC().Format("3:04 PM UTC")
+				expiry = local + " (" + utc + ")"
+			}
 		}
 	}
 

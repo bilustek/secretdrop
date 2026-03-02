@@ -764,6 +764,12 @@ func TestBuildNotificationEmail_WithTimezone(t *testing.T) {
 			wantHas:  "(3:04 PM UTC)",
 		},
 		{
+			name:     "Etc/UTC alias shows single time",
+			timezone: "Etc/UTC",
+			wantHas:  "Mar 2, 2026 at 3:04 PM UTC",
+			wantNot:  "(3:04 PM UTC)",
+		},
+		{
 			name:     "empty timezone falls back to UTC",
 			timezone: "",
 			wantHas:  "Mar 2, 2026 at 3:04 PM UTC",
