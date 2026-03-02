@@ -229,14 +229,16 @@ func (s *SecretService) Create(
 	recipients := make([]model.RecipientLink, 0, len(req.To))
 
 	var senderName string
+	var senderTimezone string
 	if s.userRepo != nil {
 		if u, err := s.userRepo.FindByID(ctx, userID); err == nil {
 			senderName = u.Name
+			senderTimezone = u.Timezone
 		}
 	}
 
 	for _, recipientEmail := range req.To {
-		link, err := s.createForRecipient(ctx, req.Text, recipientEmail, expiresAt, senderName)
+		link, err := s.createForRecipient(ctx, req.Text, recipientEmail, expiresAt, senderName, senderTimezone)
 		if err != nil {
 			return nil, fmt.Errorf("create secret for %s: %w", recipientEmail, err)
 		}
@@ -328,6 +330,7 @@ func (s *SecretService) createForRecipient(
 	text, recipientEmail string,
 	expiresAt time.Time,
 	senderName string,
+	senderTimezone string,
 ) (*model.RecipientLink, error) {
 	randomKey, err := secretdropvault.GenerateRandomKey()
 	if err != nil {
@@ -370,7 +373,7 @@ func (s *SecretService) createForRecipient(
 	}
 
 	subject := fromLine + " sent you a secure message — SecretDrop"
-	html := buildNotificationEmail(fromLine, link, expiresAt)
+	html := BuildNotificationEmail(fromLine, link, expiresAt, senderTimezone)
 
 	if err := s.sender.Send(ctx, recipientEmail, subject, html); err != nil {
 		return nil, fmt.Errorf("send email: %w", err)
@@ -438,8 +441,24 @@ func validateCreateRequest(req *model.CreateRequest, maxRecipients, maxTextLengt
 	return nil
 }
 
-func buildNotificationEmail(senderName, link string, expiresAt time.Time) string {
-	expiry := expiresAt.Format("Jan 2, 2006 at 3:04 PM UTC")
+// BuildNotificationEmail generates the HTML email body for secret notifications.
+// When senderTimezone is a valid non-UTC IANA timezone, the expiry is shown in
+// the sender's local time with a UTC parenthetical; otherwise plain UTC is used.
+func BuildNotificationEmail(senderName, link string, expiresAt time.Time, senderTimezone string) string {
+	var expiry string
+
+	if senderTimezone != "" && senderTimezone != "UTC" {
+		loc, err := time.LoadLocation(senderTimezone)
+		if err == nil {
+			local := expiresAt.In(loc).Format("Jan 2, 2006 at 3:04 PM MST")
+			utc := expiresAt.UTC().Format("3:04 PM UTC")
+			expiry = local + " (" + utc + ")"
+		}
+	}
+
+	if expiry == "" {
+		expiry = expiresAt.UTC().Format("Jan 2, 2006 at 3:04 PM UTC")
+	}
 
 	return "<!DOCTYPE html>" +
 		`<html lang="en">` +
