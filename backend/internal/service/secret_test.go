@@ -603,7 +603,8 @@ func TestNormalizeExpiry(t *testing.T) {
 		{name: "240h maps to 10d", raw: "240h", want: "10d"},
 		{name: "720h maps to 30d", raw: "720h", want: "30d"},
 		{name: "2h rounds to 1h", raw: "2h", want: "1h"},
-		{name: "48h rounds to 1d or 5d", raw: "48h", want: "1d"},
+		{name: "48h tie-break picks shorter 1d", raw: "48h", want: "1d"},
+		{name: "72h tie-break picks shorter 1d", raw: "72h", want: "1d"},
 	}
 
 	for _, tt := range tests {

@@ -118,7 +118,8 @@ func NormalizeExpiry(raw string) string {
 	bestDiff := abs(d - AllowedExpiries[bestKey])
 
 	for key, dur := range AllowedExpiries {
-		if diff := abs(d - dur); diff < bestDiff {
+		diff := abs(d - dur)
+		if diff < bestDiff || (diff == bestDiff && dur < AllowedExpiries[bestKey]) {
 			bestKey = key
 			bestDiff = diff
 		}
