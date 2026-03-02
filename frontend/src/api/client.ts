@@ -115,6 +115,7 @@ export interface MeResponse {
   secrets_limit: number
   max_text_length: number
   default_expiry: string
+  timezone: string
 }
 
 export interface CreateSecretRequest {
@@ -173,6 +174,14 @@ async function softAuthFetch<T>(path: string): Promise<T> {
 
 export const api = {
   me: () => softAuthFetch<MeResponse>("/me"),
+
+  updateTimezone: (timezone: string) =>
+    authenticatedFetch(`${API_BASE}/me/timezone`, {
+      method: "PUT",
+      body: JSON.stringify({ timezone }),
+    }).then((r) => {
+      if (!r.ok) throw new Error("Failed to update timezone")
+    }),
 
   createSecret: (data: CreateSecretRequest) =>
     request<CreateSecretResponse>("/secrets", {
