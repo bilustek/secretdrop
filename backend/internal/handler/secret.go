@@ -142,6 +142,12 @@ func (h *SecretHandler) UpdateTimezone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.userRepo.UpdateTimezone(r.Context(), claims.UserID, req.Timezone); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+
+			return
+		}
+
 		writeError(w, errTypeInternal, "Failed to update timezone", http.StatusInternalServerError)
 
 		return

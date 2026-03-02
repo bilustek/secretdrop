@@ -14,10 +14,10 @@ export default function AuthCallback() {
       return
     }
 
-    auth.refreshUser().then(() => {
-      if (auth.user) {
+    auth.refreshUser().then((user) => {
+      if (user) {
         const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
-        if (browserTz && browserTz !== auth.user.timezone) {
+        if (browserTz && browserTz !== user.timezone) {
           api.updateTimezone(browserTz).catch(() => {
             // Timezone sync is best-effort — don't block login
           })
