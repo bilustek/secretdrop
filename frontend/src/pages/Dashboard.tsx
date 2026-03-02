@@ -76,6 +76,14 @@ export default function Dashboard() {
     }
   }, [auth?.user?.default_expiry, expiresIn])
 
+  useEffect(() => {
+    if (!auth?.user) return
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (browserTz && browserTz !== auth.user.timezone) {
+      api.updateTimezone(browserTz).catch(() => {})
+    }
+  }, [auth?.user])
+
   if (!auth || !auth.user) return null
 
   const { user, refreshUser } = auth
