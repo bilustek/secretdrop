@@ -220,6 +220,7 @@ paths:
                 secrets_limit: 100
                 recipients_limit: 10
                 max_text_length: 65536
+                timezone: "Europe/Istanbul"
         "401":
           description: Authentication required
           content:
@@ -256,6 +257,45 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/me/timezone:
+    put:
+      operationId: updateTimezone
+      summary: Update user timezone
+      description: |
+        Updates the authenticated user's timezone. The timezone must be a valid
+        IANA timezone string (e.g. "Europe/Istanbul", "America/New_York").
+        The frontend calls this automatically after each login to keep the
+        user's timezone in sync with their browser.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimezoneRequest"
+            example:
+              timezone: "Europe/Istanbul"
+      responses:
+        "204":
+          description: Timezone updated
+        "400":
+          description: Invalid timezone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: validation_error
+                  message: "Invalid timezone"
+        "401":
+          description: Authentication required
           content:
             application/json:
               schema:
@@ -1011,6 +1051,19 @@ components:
             - "10d"
             - "30d"
           description: Default expiry value from server configuration (used to pre-select in UI)
+        timezone:
+          type: string
+          description: User's IANA timezone (e.g. "Europe/Istanbul", "America/New_York"). Defaults to "UTC".
+          example: "Europe/Istanbul"
+
+    TimezoneRequest:
+      type: object
+      required:
+        - timezone
+      properties:
+        timezone:
+          type: string
+          description: IANA timezone string (e.g. "Europe/Istanbul", "America/New_York")
 
     TokenPair:
       type: object

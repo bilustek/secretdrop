@@ -8,7 +8,7 @@ ARG GOARCH
 RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o secretdrop ./cmd/secretdrop/main.go
 
 FROM alpine:latest AS certs
-RUN apk add --update --no-cache ca-certificates
+RUN apk add --update --no-cache ca-certificates tzdata
 
 FROM busybox:latest
 ARG UID=10001
@@ -26,6 +26,7 @@ RUN mkdir -p /app/db && chown appuser:appuser /app/db
 
 USER appuser
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=certs /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /build/secretdrop /app/secretdrop
 
 ENTRYPOINT ["/app/secretdrop"]
