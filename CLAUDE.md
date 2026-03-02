@@ -71,6 +71,7 @@ secretdrop/
 - `POST /api/v1/secrets/{token}/reveal` — Reveal and burn secret (200)
 - `GET /api/v1/me` — Authenticated user profile (200, auth required)
 - `DELETE /api/v1/me` — Delete user account (204, auth required)
+- `PUT /api/v1/me/timezone` — Update user timezone (204, auth required)
 - `POST /api/v1/contact` — Send contact form message (200)
 - `GET /auth/google` — Google OAuth login redirect
 - `GET /auth/google/callback` — Google OAuth callback

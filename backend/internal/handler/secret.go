@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
 	"github.com/bilusteknoloji/secretdrop/internal/middleware"
@@ -27,6 +28,7 @@ func (h *SecretHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/secrets", h.Create)
 	mux.HandleFunc("POST /api/v1/secrets/{token}/reveal", h.Reveal)
 	mux.HandleFunc("GET /api/v1/me", h.Me)
+	mux.HandleFunc("PUT /api/v1/me/timezone", h.UpdateTimezone)
 	mux.HandleFunc("GET /healthz", handleHealthz)
 }
 
@@ -41,7 +43,7 @@ func (h *SecretHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req model.CreateRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, "validation_error", "Invalid JSON body", http.StatusBadRequest)
+		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
 
 		return
 	}
@@ -67,7 +69,7 @@ func (h *SecretHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	u, err := h.userRepo.FindByID(r.Context(), claims.UserID)
 	if err != nil {
-		writeError(w, "not_found", "User not found", http.StatusNotFound)
+		writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
 
 		return
 	}
@@ -87,6 +89,7 @@ func (h *SecretHandler) Me(w http.ResponseWriter, r *http.Request) {
 		RecipientsLimit: u.RecipientsLimit(),
 		MaxTextLength:   u.MaxTextLength(),
 		DefaultExpiry:   h.svc.DefaultExpiry(),
+		Timezone:        u.Timezone,
 	})
 }
 
@@ -94,14 +97,14 @@ func (h *SecretHandler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *SecretHandler) Reveal(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
-		writeError(w, "validation_error", "Token is required", http.StatusBadRequest)
+		writeError(w, errTypeValidaton, "Token is required", http.StatusBadRequest)
 
 		return
 	}
 
 	var req model.RevealRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, "validation_error", "Invalid JSON body", http.StatusBadRequest)
+		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
 
 		return
 	}
@@ -114,6 +117,49 @@ func (h *SecretHandler) Reveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// UpdateTimezone handles PUT /api/v1/me/timezone.
+func (h *SecretHandler) UpdateTimezone(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeError(w, "unauthorized", "Authentication required", http.StatusUnauthorized)
+
+		return
+	}
+
+	var req model.TimezoneRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, errTypeValidaton, "Invalid JSON body", http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Timezone == "" {
+		writeError(w, errTypeValidaton, "Timezone is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if _, err := time.LoadLocation(req.Timezone); err != nil {
+		writeError(w, errTypeValidaton, "Invalid timezone", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := h.userRepo.UpdateTimezone(r.Context(), claims.UserID, req.Timezone); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+
+			return
+		}
+
+		writeError(w, errTypeInternal, "Failed to update timezone", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func handleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -131,5 +177,5 @@ func handleServiceError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	writeError(w, "internal_error", "Internal server error", http.StatusInternalServerError)
+	writeError(w, errTypeInternal, "Internal server error", http.StatusInternalServerError)
 }

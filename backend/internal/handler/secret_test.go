@@ -363,3 +363,393 @@ func TestMe_Unauthenticated(t *testing.T) {
 		t.Errorf("error type = %q; want %q", resp.Error.Type, "unauthorized")
 	}
 }
+
+func TestUpdateTimezone_Valid(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-valid",
+		Email: "tz@example.com", Name: "TZ User",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	body := `{"timezone":"Europe/Istanbul"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+
+	found, err := userRepo.FindByID(context.Background(), u.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+	if found.Timezone != "Europe/Istanbul" {
+		t.Errorf("Timezone = %q; want %q", found.Timezone, "Europe/Istanbul")
+	}
+}
+
+func TestUpdateTimezone_Invalid(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-invalid",
+		Email: "tz-invalid@example.com", Name: "TZ Invalid",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	body := `{"timezone":"Mars/Olympus"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUpdateTimezone_Unauthenticated(t *testing.T) {
+	t.Parallel()
+
+	_, mux := newTestHandler(t)
+
+	body := `{"timezone":"Europe/Istanbul"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestUpdateTimezone_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: 99999, Email: "ghost@example.com", Tier: model.TierFree}
+	body := `{"timezone":"Europe/Istanbul"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+
+	var resp model.ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal error = %v", err)
+	}
+
+	if resp.Error.Type != "not_found" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "not_found")
+	}
+}
+
+func TestUpdateTimezone_EmptyTimezone(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-empty",
+		Email: "tz-empty@example.com", Name: "TZ Empty",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	body := `{"timezone":""}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUpdateTimezone_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-badjson",
+		Email: "tz-badjson@example.com", Name: "TZ BadJSON",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestMe_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: 99999, Email: "ghost@example.com", Tier: model.TierFree}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestReveal_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	_, mux := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets/sometoken/reveal", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestMe_IncludesTimezone(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-me",
+		Email: "tz-me@example.com", Name: "TZ Me",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal error = %v", err)
+	}
+
+	tz, ok := resp["timezone"].(string)
+	if !ok {
+		t.Fatal("response should include timezone field")
+	}
+	if tz != "UTC" {
+		t.Errorf("timezone = %q; want %q", tz, "UTC")
+	}
+}

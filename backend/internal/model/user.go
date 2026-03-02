@@ -26,6 +26,7 @@ type User struct {
 	SecretsUsed int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	Timezone    string
 
 	// SecretsLimitOverride is an optional per-user override for secrets limit.
 	// When nil, the tier default from the limits table is used.

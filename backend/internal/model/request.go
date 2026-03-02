@@ -12,3 +12,8 @@ type RevealRequest struct {
 	Email string `json:"email"`
 	Key   string `json:"key"`
 }
+
+// TimezoneRequest is the incoming JSON body for updating user timezone.
+type TimezoneRequest struct {
+	Timezone string `json:"timezone"`
+}

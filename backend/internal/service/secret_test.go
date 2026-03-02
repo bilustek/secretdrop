@@ -740,3 +740,56 @@ func TestCreate_ProUserMultipleRecipients(t *testing.T) {
 		t.Fatalf("Create() error = %v; pro user should allow 5 recipients", createErr)
 	}
 }
+
+func TestBuildNotificationEmail_WithTimezone(t *testing.T) {
+	t.Parallel()
+
+	expiresAt := time.Date(2026, 3, 2, 15, 4, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		timezone string
+		wantHas  string
+		wantNot  string
+	}{
+		{
+			name:     "UTC timezone shows single time",
+			timezone: "UTC",
+			wantHas:  "Mar 2, 2026 at 3:04 PM UTC",
+			wantNot:  "(3:04 PM UTC)",
+		},
+		{
+			name:     "non-UTC timezone shows dual format",
+			timezone: "America/New_York",
+			wantHas:  "(3:04 PM UTC)",
+		},
+		{
+			name:     "Etc/UTC alias shows single time",
+			timezone: "Etc/UTC",
+			wantHas:  "Mar 2, 2026 at 3:04 PM UTC",
+			wantNot:  "(3:04 PM UTC)",
+		},
+		{
+			name:     "empty timezone falls back to UTC",
+			timezone: "",
+			wantHas:  "Mar 2, 2026 at 3:04 PM UTC",
+			wantNot:  "(3:04 PM UTC)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			html := service.BuildNotificationEmail("Test User", "https://example.com/s/token#key", expiresAt, tt.timezone)
+
+			if !strings.Contains(html, tt.wantHas) {
+				t.Errorf("email should contain %q, got:\n%s", tt.wantHas, html)
+			}
+
+			if tt.wantNot != "" && strings.Contains(html, tt.wantNot) {
+				t.Errorf("email should NOT contain %q for %s timezone", tt.wantNot, tt.timezone)
+			}
+		})
+	}
+}
