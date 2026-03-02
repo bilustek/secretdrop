@@ -539,6 +539,160 @@ func TestUpdateTimezone_NotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateTimezone_EmptyTimezone(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-empty",
+		Email: "tz-empty@example.com", Name: "TZ Empty",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	body := `{"timezone":""}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUpdateTimezone_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	u, err := userRepo.Upsert(context.Background(), &model.User{
+		Provider: "google", ProviderID: "tz-badjson",
+		Email: "tz-badjson@example.com", Name: "TZ BadJSON",
+	})
+	if err != nil {
+		t.Fatalf("upsert user error = %v", err)
+	}
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: u.ID, Email: u.Email, Tier: u.Tier}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/timezone", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestMe_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+	svc, err := service.New(repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	userRepo, err := usersqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("usersqlite.New() error = %v", err)
+	}
+	t.Cleanup(func() { userRepo.Close() })
+
+	h := handler.NewSecretHandler(svc, userRepo)
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	claims := &auth.Claims{UserID: 99999, Email: "ghost@example.com", Tier: model.TierFree}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req = withAuth(req, claims)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d, body: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestReveal_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	_, mux := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/secrets/sometoken/reveal", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestMe_IncludesTimezone(t *testing.T) {
 	t.Parallel()
 

@@ -135,6 +135,12 @@ func (h *SecretHandler) UpdateTimezone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Timezone == "" {
+		writeError(w, errTypeValidaton, "Timezone is required", http.StatusBadRequest)
+
+		return
+	}
+
 	if _, err := time.LoadLocation(req.Timezone); err != nil {
 		writeError(w, errTypeValidaton, "Invalid timezone", http.StatusBadRequest)
 
