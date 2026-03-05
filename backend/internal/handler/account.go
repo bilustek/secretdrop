@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 // SubscriptionCanceller cancels a Stripe subscription.

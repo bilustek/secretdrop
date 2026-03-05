@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack"
 )
 
 const defaultTimeout = 5 * time.Second

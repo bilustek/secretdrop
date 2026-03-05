@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
-	"github.com/bilusteknoloji/secretdrop/internal/slack/noop"
+	"github.com/bilustek/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack/noop"
 )
 
 func TestNotifierImplementsNotifier(t *testing.T) {

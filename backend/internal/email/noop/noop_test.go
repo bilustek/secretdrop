@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
-	"github.com/bilusteknoloji/secretdrop/internal/email/noop"
+	"github.com/bilustek/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/email/noop"
 )
 
 func TestSenderImplementsSender(t *testing.T) {

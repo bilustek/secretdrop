@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
-	"github.com/bilusteknoloji/secretdrop/internal/slack/webhook"
+	"github.com/bilustek/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack/webhook"
 )
 
 func TestNotifierImplementsNotifier(t *testing.T) {

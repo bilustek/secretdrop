@@ -3,7 +3,7 @@ package model_test
 import (
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/model"
 )
 
 func TestUserSecretsLimit(t *testing.T) {

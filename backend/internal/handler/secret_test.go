@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	"github.com/bilusteknoloji/secretdrop/internal/email/noop"
-	"github.com/bilusteknoloji/secretdrop/internal/handler"
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/repository/sqlite"
-	"github.com/bilusteknoloji/secretdrop/internal/service"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/email/noop"
+	"github.com/bilustek/secretdrop/internal/handler"
+	"github.com/bilustek/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/repository/sqlite"
+	"github.com/bilustek/secretdrop/internal/service"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 var testClaims = &auth.Claims{

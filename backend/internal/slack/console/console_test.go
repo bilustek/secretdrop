@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
-	"github.com/bilusteknoloji/secretdrop/internal/slack/console"
+	"github.com/bilustek/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack/console"
 )
 
 func TestNotifierImplementsNotifier(t *testing.T) {

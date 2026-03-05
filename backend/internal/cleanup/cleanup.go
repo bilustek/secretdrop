@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
+	"github.com/bilustek/secretdrop/internal/repository"
 )
 
 const defaultInterval = 1 * time.Minute

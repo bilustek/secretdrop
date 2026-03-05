@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/handler"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/handler"
+	"github.com/bilustek/secretdrop/internal/model"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 func newAdminTestRepo(t *testing.T) *usersqlite.Repository {

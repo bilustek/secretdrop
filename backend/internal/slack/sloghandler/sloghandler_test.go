@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
-	"github.com/bilusteknoloji/secretdrop/internal/slack/sloghandler"
+	"github.com/bilustek/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack/sloghandler"
 )
 
 func TestErrorSendsNotification(t *testing.T) {

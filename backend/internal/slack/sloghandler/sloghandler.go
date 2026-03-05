@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack"
 )
 
 const defaultDedup = time.Minute

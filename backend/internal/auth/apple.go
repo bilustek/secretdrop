@@ -19,8 +19,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/email"
 
 	resendapi "github.com/resend/resend-go/v2"
 )

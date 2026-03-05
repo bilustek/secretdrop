@@ -12,8 +12,8 @@ import (
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/slack"
 )
 
 const (

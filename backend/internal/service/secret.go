@@ -9,11 +9,11 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
-	"github.com/bilusteknoloji/secretdrop/internal/email"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/repository"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/appinfo"
+	"github.com/bilustek/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/repository"
+	"github.com/bilustek/secretdrop/internal/user"
 
 	"github.com/bilustek/secretdropvault"
 	"github.com/google/uuid"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/model"
 )
 
 // Repository defines the persistence operations for secrets.
