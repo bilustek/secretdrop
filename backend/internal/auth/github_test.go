@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/model"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 func TestGithubConfig(t *testing.T) {

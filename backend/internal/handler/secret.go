@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/service"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/appinfo"
+	"github.com/bilustek/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/service"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 // SecretHandler handles HTTP requests for secret operations.

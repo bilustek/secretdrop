@@ -1,4 +1,4 @@
-module github.com/bilusteknoloji/secretdrop
+module github.com/bilustek/secretdrop
 
 go 1.26.0
 

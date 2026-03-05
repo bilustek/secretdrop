@@ -9,7 +9,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/auth"
 )
 
 type contextKey string

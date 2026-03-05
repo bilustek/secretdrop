@@ -6,7 +6,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/email"
 )
 
 const contactRecipient = "support@bilustek.com"

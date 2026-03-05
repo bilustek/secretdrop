@@ -1,6 +1,6 @@
 services:
   secretdrop_backend:
-    image: ghcr.io/bilusteknoloji/secretdrop/secretdrop-backend:latest
+    image: ghcr.io/bilustek/secretdrop/secretdrop-backend:latest
     environment:
       RESEND_API_KEY: "${RESEND_API_KEY}"
       JWT_SECRET: "${JWT_SECRET}"
@@ -64,7 +64,7 @@ services:
       - "traefik.http.routers.secretdrop-backend-admin.service=secretdrop-backend"
 
   secretdrop_frontend:
-    image: ghcr.io/bilusteknoloji/secretdrop/secretdrop-frontend:latest
+    image: ghcr.io/bilustek/secretdrop/secretdrop-frontend:latest
     networks:
       - traefik_net
     labels:

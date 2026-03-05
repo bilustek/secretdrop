@@ -10,8 +10,8 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/middleware"
 )
 
 func testAuthService(t *testing.T) *auth.Service {

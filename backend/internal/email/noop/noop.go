@@ -3,7 +3,7 @@ package noop
 import (
 	"context"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/email"
 )
 
 // compile-time interface check.

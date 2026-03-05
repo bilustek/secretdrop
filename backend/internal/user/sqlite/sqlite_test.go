@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
-	"github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 func newTestRepo(t *testing.T) *sqlite.Repository {

@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	"github.com/bilusteknoloji/secretdrop/internal/handler"
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/handler"
+	"github.com/bilustek/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/model"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 type mockCanceller struct {

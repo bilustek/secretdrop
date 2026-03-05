@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/middleware"
 )
 
 // --- RequireJSON ---

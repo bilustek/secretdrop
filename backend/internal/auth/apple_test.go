@@ -21,8 +21,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/auth"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 // generateTestP8Key creates a base64-encoded ECDSA P-256 private key in PEM format for testing.

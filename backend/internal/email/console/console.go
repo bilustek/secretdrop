@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/email"
+	"github.com/bilustek/secretdrop/internal/email"
 )
 
 const separator = "-------------------------------------------------------------------------------"

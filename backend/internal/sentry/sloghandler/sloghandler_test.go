@@ -9,7 +9,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/bilusteknoloji/secretdrop/internal/sentry/sloghandler"
+	"github.com/bilustek/secretdrop/internal/sentry/sloghandler"
 )
 
 // captureHandler records the slog.Records it handled.
