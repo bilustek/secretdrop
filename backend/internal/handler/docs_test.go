@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/handler"
+	"github.com/bilustek/secretdrop/internal/handler"
 )
 
 func TestOpenAPISpec(t *testing.T) {

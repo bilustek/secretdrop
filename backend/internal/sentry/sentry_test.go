@@ -3,7 +3,7 @@ package sentry_test
 import (
 	"testing"
 
-	sentrypkg "github.com/bilusteknoloji/secretdrop/internal/sentry"
+	sentrypkg "github.com/bilustek/secretdrop/internal/sentry"
 )
 
 func TestInitWithInvalidDSN(t *testing.T) {

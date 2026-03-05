@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/middleware"
 )
 
 func TestSecurityHeaders(t *testing.T) {

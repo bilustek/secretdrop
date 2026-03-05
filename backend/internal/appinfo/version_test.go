@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
+	"github.com/bilustek/secretdrop/internal/appinfo"
 )
 
 var semverRe = regexp.MustCompile(`^\d+\.\d+\.\d+$`)

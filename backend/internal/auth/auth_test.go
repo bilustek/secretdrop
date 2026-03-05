@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/auth"
 	"github.com/golang-jwt/jwt/v5"
 )
 

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 const googleTokenInfoURL = "https://oauth2.googleapis.com/tokeninfo" //nolint:gosec // URL, not a credential

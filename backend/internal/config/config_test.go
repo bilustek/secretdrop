@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/config"
+	"github.com/bilustek/secretdrop/internal/config"
 )
 
 func clearAllEnvVars(t *testing.T) {

@@ -1,8 +1,8 @@
 ![Version](https://img.shields.io/badge/version-0.4.0-orange.svg)
 ![Go](https://img.shields.io/badge/go-1.26-00ADD8.svg?logo=go&logoColor=white)
-[![Run golangci-lint](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/lint.yml)
-[![Run go tests](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml/badge.svg)](https://github.com/bilusteknoloji/secretdrop/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/bilusteknoloji/secretdrop/graph/badge.svg?token=96Z01WRM6E)](https://codecov.io/gh/bilusteknoloji/secretdrop)
+[![Run golangci-lint](https://github.com/bilustek/secretdrop/actions/workflows/lint.yml/badge.svg)](https://github.com/bilustek/secretdrop/actions/workflows/lint.yml)
+[![Run go tests](https://github.com/bilustek/secretdrop/actions/workflows/test.yml/badge.svg)](https://github.com/bilustek/secretdrop/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/bilustek/secretdrop/graph/badge.svg?token=96Z01WRM6E)](https://codecov.io/gh/bilustek/secretdrop)
 
 # SecretDrop
 
@@ -33,7 +33,7 @@ deleted** from the database — no trace left.
 
 ```bash
 # Clone the repo
-git clone https://github.com/bilusteknoloji/secretdrop.git
+git clone https://github.com/bilustek/secretdrop.git
 cd secretdrop
 
 # Install pre-commit hooks

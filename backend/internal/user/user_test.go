@@ -3,7 +3,7 @@ package user_test
 import (
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 func TestDefaultListQuery(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
-	usersqlite "github.com/bilusteknoloji/secretdrop/internal/user/sqlite"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
+	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
 func newAdminTestRepo(t *testing.T) *usersqlite.Repository {

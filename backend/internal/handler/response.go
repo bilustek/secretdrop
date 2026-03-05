@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/model"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

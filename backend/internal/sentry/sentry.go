@@ -6,7 +6,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/bilusteknoloji/secretdrop/internal/appinfo"
+	"github.com/bilustek/secretdrop/internal/appinfo"
 )
 
 // Init initializes the Sentry SDK with the given DSN and options.

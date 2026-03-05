@@ -11,10 +11,10 @@ import (
 
 	"github.com/stripe/stripe-go/v82"
 
-	"github.com/bilusteknoloji/secretdrop/internal/auth"
-	"github.com/bilusteknoloji/secretdrop/internal/middleware"
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/auth"
+	"github.com/bilustek/secretdrop/internal/middleware"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
 )
 
 // mockStripeClient is a test double for StripeClient.

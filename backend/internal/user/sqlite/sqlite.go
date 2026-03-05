@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilusteknoloji/secretdrop/internal/model"
-	"github.com/bilusteknoloji/secretdrop/internal/user"
+	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
 
 	_ "modernc.org/sqlite" // SQLite driver
 )

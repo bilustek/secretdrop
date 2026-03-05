@@ -7,7 +7,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/bilusteknoloji/secretdrop/internal/slack"
+	"github.com/bilustek/secretdrop/internal/slack"
 )
 
 // compile-time interface check.
