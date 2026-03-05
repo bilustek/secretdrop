@@ -516,6 +516,11 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 		args = append(args, q.Tier)
 	}
 
+	if q.Provider != "" {
+		clauses = append(clauses, "provider = ?")
+		args = append(args, q.Provider)
+	}
+
 	if len(clauses) > 0 {
 		query += sqlWhere + strings.Join(clauses, sqlAnd)
 	}
@@ -583,6 +588,11 @@ func (r *Repository) CountUsers(ctx context.Context, opts ...user.ListOption) (i
 	if q.Tier != "" {
 		clauses = append(clauses, "tier = ?")
 		args = append(args, q.Tier)
+	}
+
+	if q.Provider != "" {
+		clauses = append(clauses, "provider = ?")
+		args = append(args, q.Provider)
 	}
 
 	if len(clauses) > 0 {

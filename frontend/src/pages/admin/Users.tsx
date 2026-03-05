@@ -13,6 +13,7 @@ export default function AdminUsers() {
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [tierFilter, setTierFilter] = useState("")
+  const [providerFilter, setProviderFilter] = useState("")
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [page, setPage] = useState(1)
@@ -30,6 +31,7 @@ export default function AdminUsers() {
       const result = await adminApi.fetchUsers({
         q: search || undefined,
         tier: tierFilter || undefined,
+        provider: providerFilter || undefined,
         sort: sortField,
         order: sortOrder,
         page,
@@ -41,7 +43,7 @@ export default function AdminUsers() {
     } finally {
       setLoading(false)
     }
-  }, [search, tierFilter, sortField, sortOrder, page])
+  }, [search, tierFilter, providerFilter, sortField, sortOrder, page])
 
   useEffect(() => {
     fetchUsers()
@@ -160,6 +162,19 @@ export default function AdminUsers() {
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </option>
             ))}
+          </select>
+          <select
+            value={providerFilter}
+            onChange={(e) => {
+              setProviderFilter(e.target.value)
+              setPage(1)
+            }}
+            className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+          >
+            <option value="">All Providers</option>
+            <option value="google">Google</option>
+            <option value="github">GitHub</option>
+            <option value="apple">Apple</option>
           </select>
         </div>
       </div>

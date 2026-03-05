@@ -54,6 +54,7 @@ export interface TierLimits {
 export interface UserListParams {
   q?: string
   tier?: string
+  provider?: string
   sort?: string
   order?: string
   page?: number

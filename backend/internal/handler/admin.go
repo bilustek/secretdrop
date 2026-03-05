@@ -481,6 +481,10 @@ func parseUserListOptions(r *http.Request) []user.ListOption {
 		opts = append(opts, user.WithTier(tier))
 	}
 
+	if provider := r.URL.Query().Get("provider"); provider != "" {
+		opts = append(opts, user.WithProvider(provider))
+	}
+
 	if sort := r.URL.Query().Get("sort"); sort != "" {
 		order := r.URL.Query().Get("order")
 		opts = append(opts, user.WithSort(sort, order))

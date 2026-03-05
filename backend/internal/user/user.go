@@ -59,13 +59,14 @@ type ListOption func(*ListQuery)
 
 // ListQuery holds the parameters for list queries.
 type ListQuery struct {
-	Search  string
-	Tier    string
-	Status  string
-	Sort    string
-	Order   string
-	Page    int
-	PerPage int
+	Search   string
+	Tier     string
+	Provider string
+	Status   string
+	Sort     string
+	Order    string
+	Page     int
+	PerPage  int
 }
 
 // DefaultListQuery returns a ListQuery with sensible defaults.
@@ -99,6 +100,13 @@ func WithSearch(search string) ListOption {
 func WithTier(tier string) ListOption {
 	return func(q *ListQuery) {
 		q.Tier = tier
+	}
+}
+
+// WithProvider filters users by authentication provider.
+func WithProvider(provider string) ListOption {
+	return func(q *ListQuery) {
+		q.Provider = provider
 	}
 }
 

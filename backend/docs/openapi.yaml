@@ -679,6 +679,12 @@ paths:
             type: string
             enum: [asc, desc]
             default: desc
+        - name: provider
+          in: query
+          description: Filter by authentication provider
+          schema:
+            type: string
+            enum: [google, github, apple]
         - name: page
           in: query
           schema:

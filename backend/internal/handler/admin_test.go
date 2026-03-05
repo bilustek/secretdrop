@@ -167,6 +167,40 @@ func TestAdminListUsers_FilterByTier(t *testing.T) {
 	}
 }
 
+func TestAdminListUsers_FilterByProvider(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "google@example.com", Name: "Google User",
+	})
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "github", ProviderID: "gh1",
+		Email: "github@example.com", Name: "GitHub User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users?provider=github", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Total != 1 {
+		t.Errorf("total = %d; want 1", resp.Total)
+	}
+
+	if len(resp.Users) == 1 && resp.Users[0].Provider != "github" {
+		t.Errorf("provider = %q; want %q", resp.Users[0].Provider, "github")
+	}
+}
+
 func TestAdminListUsers_Sort(t *testing.T) {
 	t.Parallel()
 
