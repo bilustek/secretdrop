@@ -63,12 +63,12 @@ func (m *mockRepo) Close() error                                   { return nil 
 // mockUserRepo is a minimal user.Repository for testing error paths.
 type mockUserRepo struct {
 	user.Repository
-	findByIDResult   *model.User
-	findByIDErr      error
-	getLimitsResult  *user.TierLimits
-	getLimitsErr     error
-	incrementErr     error
-	incrementCalled  bool
+	findByIDResult  *model.User
+	findByIDErr     error
+	getLimitsResult *user.TierLimits
+	getLimitsErr    error
+	incrementErr    error
+	incrementCalled bool
 }
 
 func (m *mockUserRepo) FindByID(_ context.Context, _ int64) (*model.User, error) {
@@ -1391,7 +1391,12 @@ func TestBuildNotificationEmail_WithTimezone(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			html := service.BuildNotificationEmail("Test User", "https://example.com/s/token#key", expiresAt, tt.timezone)
+			html := service.BuildNotificationEmail(
+				"Test User",
+				"https://example.com/s/token#key",
+				expiresAt,
+				tt.timezone,
+			)
 
 			if !strings.Contains(html, tt.wantHas) {
 				t.Errorf("email should contain %q, got:\n%s", tt.wantHas, html)

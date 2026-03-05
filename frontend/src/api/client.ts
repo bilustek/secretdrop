@@ -113,6 +113,7 @@ export interface MeResponse {
   tier: string
   secrets_used: number
   secrets_limit: number
+  recipients_limit: number
   max_text_length: number
   default_expiry: string
   timezone: string

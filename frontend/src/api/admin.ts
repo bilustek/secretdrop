@@ -13,6 +13,8 @@ export interface AdminUser {
   secrets_used: number
   secrets_limit: number
   secrets_limit_override: number | null
+  recipients_limit: number
+  recipients_limit_override: number | null
   created_at: string
 }
 
@@ -125,7 +127,7 @@ export const adminApi = {
   fetchUsers: (params: UserListParams = {}) =>
     adminRequest<AdminUsersResponse>(`/users${buildQuery(params as Record<string, string | number | undefined>)}`),
 
-  updateUser: (id: number, data: { tier?: string; secrets_limit_override?: number; clear_secrets_limit?: boolean }) =>
+  updateUser: (id: number, data: { tier?: string; secrets_limit_override?: number; clear_secrets_limit?: boolean; recipients_limit_override?: number; clear_recipients_limit?: boolean }) =>
     adminRequest<{ status: string }>(`/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

@@ -735,6 +735,14 @@ paths:
                 summary: Clear per-user secrets limit override
                 value:
                   clear_secrets_limit: true
+              set_recipients_override:
+                summary: Set per-user recipients limit override
+                value:
+                  recipients_limit_override: 10
+              clear_recipients_override:
+                summary: Clear per-user recipients limit override
+                value:
+                  clear_recipients_limit: true
       responses:
         "200":
           description: User updated
@@ -1163,6 +1171,13 @@ components:
           type: integer
           nullable: true
           description: Per-user secrets limit override (null if using tier default)
+        recipients_limit:
+          type: integer
+          description: Effective recipients limit (per-user override > tier limit > fallback)
+        recipients_limit_override:
+          type: integer
+          nullable: true
+          description: Per-user recipients limit override (null if using tier default)
         created_at:
           type: string
           format: date-time
@@ -1229,6 +1244,13 @@ components:
         clear_secrets_limit:
           type: boolean
           description: Set to true to remove the per-user secrets limit override
+        recipients_limit_override:
+          type: integer
+          minimum: 1
+          description: Per-user recipients limit override (positive integer)
+        clear_recipients_limit:
+          type: boolean
+          description: Set to true to remove the per-user recipients limit override
 
     AdminLimitsResponse:
       type: object

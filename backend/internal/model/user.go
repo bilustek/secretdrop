@@ -32,6 +32,10 @@ type User struct {
 	// When nil, the tier default from the limits table is used.
 	SecretsLimitOverride *int
 
+	// RecipientsLimitOverride is an optional per-user override for recipients limit.
+	// When nil, the tier default from the limits table is used.
+	RecipientsLimitOverride *int
+
 	// TierSecretsLimit is the secrets limit from the limits table for this user's tier.
 	// Set at query time; zero means not loaded.
 	TierSecretsLimit int
@@ -75,8 +79,12 @@ func (u *User) MaxTextLength() int {
 }
 
 // RecipientsLimit returns the maximum number of recipients per secret.
-// Priority: limits table > hardcoded fallback.
+// Priority: per-user override > limits table > hardcoded fallback.
 func (u *User) RecipientsLimit() int {
+	if u.RecipientsLimitOverride != nil {
+		return *u.RecipientsLimitOverride
+	}
+
 	if u.TierRecipientsLimit > 0 {
 		return u.TierRecipientsLimit
 	}

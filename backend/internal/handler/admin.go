@@ -16,10 +16,11 @@ const (
 	maxPerPage     = 100
 	timeFormat     = time.RFC3339
 
-	errKeyError      = "error"
-	errTypeInternal  = "internal_error"
-	errTypeValidaton = "validation_error"
-	errTypeNotFound  = "not_found"
+	errKeyError        = "error"
+	errTypeInternal    = "internal_error"
+	errTypeValidaton   = "validation_error"
+	errTypeNotFound    = "not_found"
+	errMsgUserNotFound = "User not found"
 )
 
 // AdminHandler handles admin API requests.
@@ -76,18 +77,21 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, u := range users {
-		effectiveLimit := computeEffectiveLimit(u, limitsMap)
+		effectiveSecretsLimit := computeEffectiveLimit(u, limitsMap)
+		effectiveRecipientsLimit := computeEffectiveRecipientsLimit(u, limitsMap)
 
 		resp.Users = append(resp.Users, model.AdminUserResponse{
-			ID:                   u.ID,
-			Email:                u.Email,
-			Name:                 u.Name,
-			Provider:             u.Provider,
-			Tier:                 u.Tier,
-			SecretsUsed:          u.SecretsUsed,
-			SecretsLimit:         effectiveLimit,
-			SecretsLimitOverride: u.SecretsLimitOverride,
-			CreatedAt:            u.CreatedAt.Format(timeFormat),
+			ID:                      u.ID,
+			Email:                   u.Email,
+			Name:                    u.Name,
+			Provider:                u.Provider,
+			Tier:                    u.Tier,
+			SecretsUsed:             u.SecretsUsed,
+			SecretsLimit:            effectiveSecretsLimit,
+			SecretsLimitOverride:    u.SecretsLimitOverride,
+			RecipientsLimit:         effectiveRecipientsLimit,
+			RecipientsLimitOverride: u.RecipientsLimitOverride,
+			CreatedAt:               u.CreatedAt.Format(timeFormat),
 		})
 	}
 
@@ -112,7 +116,9 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Tier == nil && req.SecretsLimitOverride == nil && !req.ClearSecretsLimit {
+	hasUpdate := req.Tier != nil || req.SecretsLimitOverride != nil || req.ClearSecretsLimit ||
+		req.RecipientsLimitOverride != nil || req.ClearRecipientsLimit
+	if !hasUpdate {
 		writeError(w, errTypeValidaton, "No update fields provided", http.StatusBadRequest)
 
 		return
@@ -135,7 +141,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 		if updateErr := h.repo.UpdateTier(r.Context(), id, *req.Tier); updateErr != nil {
 			if errors.Is(updateErr, model.ErrNotFound) {
-				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+				writeError(w, errTypeNotFound, errMsgUserNotFound, http.StatusNotFound)
 			} else {
 				slog.Error("admin update tier", errKeyError, updateErr)
 				writeError(w, errTypeInternal, "Failed to update tier", http.StatusInternalServerError)
@@ -148,7 +154,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if req.ClearSecretsLimit {
 		if clearErr := h.repo.UpdateSecretsLimitOverride(r.Context(), id, nil); clearErr != nil {
 			if errors.Is(clearErr, model.ErrNotFound) {
-				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+				writeError(w, errTypeNotFound, errMsgUserNotFound, http.StatusNotFound)
 			} else {
 				slog.Error("admin clear secrets limit", errKeyError, clearErr)
 				writeError(w, errTypeInternal, "Failed to clear secrets limit", http.StatusInternalServerError)
@@ -167,11 +173,46 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			r.Context(), id, req.SecretsLimitOverride,
 		); overrideErr != nil {
 			if errors.Is(overrideErr, model.ErrNotFound) {
-				writeError(w, errTypeNotFound, "User not found", http.StatusNotFound)
+				writeError(w, errTypeNotFound, errMsgUserNotFound, http.StatusNotFound)
 			} else {
 				slog.Error("admin update secrets limit override", errKeyError, overrideErr)
 				writeError(
 					w, errTypeInternal, "Failed to update secrets limit",
+					http.StatusInternalServerError,
+				)
+			}
+
+			return
+		}
+	}
+
+	if req.ClearRecipientsLimit {
+		if clearErr := h.repo.UpdateRecipientsLimitOverride(r.Context(), id, nil); clearErr != nil {
+			if errors.Is(clearErr, model.ErrNotFound) {
+				writeError(w, errTypeNotFound, errMsgUserNotFound, http.StatusNotFound)
+			} else {
+				slog.Error("admin clear recipients limit", errKeyError, clearErr)
+				writeError(w, errTypeInternal, "Failed to clear recipients limit", http.StatusInternalServerError)
+			}
+
+			return
+		}
+	} else if req.RecipientsLimitOverride != nil {
+		if *req.RecipientsLimitOverride <= 0 {
+			writeError(w, errTypeValidaton, "recipients_limit_override must be positive", http.StatusBadRequest)
+
+			return
+		}
+
+		if overrideErr := h.repo.UpdateRecipientsLimitOverride(
+			r.Context(), id, req.RecipientsLimitOverride,
+		); overrideErr != nil {
+			if errors.Is(overrideErr, model.ErrNotFound) {
+				writeError(w, errTypeNotFound, errMsgUserNotFound, http.StatusNotFound)
+			} else {
+				slog.Error("admin update recipients limit override", errKeyError, overrideErr)
+				writeError(
+					w, errTypeInternal, "Failed to update recipients limit",
 					http.StatusInternalServerError,
 				)
 			}
@@ -409,6 +450,24 @@ func computeEffectiveLimit(u *model.User, limitsMap map[string]*user.TierLimits)
 	}
 
 	return model.FreeTierLimit
+}
+
+// computeEffectiveRecipientsLimit returns the effective recipients limit for a user.
+// Priority: per-user override > tier limit from limits table > hardcoded fallback.
+func computeEffectiveRecipientsLimit(u *model.User, limitsMap map[string]*user.TierLimits) int {
+	if u.RecipientsLimitOverride != nil {
+		return *u.RecipientsLimitOverride
+	}
+
+	if tl, ok := limitsMap[u.Tier]; ok {
+		return tl.RecipientsLimit
+	}
+
+	if u.Tier == model.TierPro {
+		return model.ProMaxRecipients
+	}
+
+	return model.FreeMaxRecipients
 }
 
 func parseUserListOptions(r *http.Request) []user.ListOption {

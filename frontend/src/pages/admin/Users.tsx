@@ -20,6 +20,8 @@ export default function AdminUsers() {
   const [tiers, setTiers] = useState<TierLimits[]>([])
   const [editLimitUserId, setEditLimitUserId] = useState<number | null>(null)
   const [editLimitValue, setEditLimitValue] = useState("")
+  const [editRecipientsUserId, setEditRecipientsUserId] = useState<number | null>(null)
+  const [editRecipientsValue, setEditRecipientsValue] = useState("")
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -88,6 +90,27 @@ export default function AdminUsers() {
       await fetchUsers()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update limit")
+    }
+  }
+
+  const handleRecipientsSave = async (userId: number) => {
+    setActionError("")
+    try {
+      const val = editRecipientsValue.trim()
+      if (val === "") {
+        await adminApi.updateUser(userId, { clear_recipients_limit: true })
+      } else {
+        const num = parseInt(val, 10)
+        if (isNaN(num) || num <= 0) {
+          setActionError("Recipients limit must be a positive number or empty to clear")
+          return
+        }
+        await adminApi.updateUser(userId, { recipients_limit_override: num })
+      }
+      setEditRecipientsUserId(null)
+      await fetchUsers()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update recipients limit")
     }
   }
 
@@ -180,6 +203,9 @@ export default function AdminUsers() {
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
                     Usage
                   </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
+                    Recipients
+                  </th>
                   <th
                     className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400 cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors"
                     onClick={() => handleSort("created_at")}
@@ -256,6 +282,55 @@ export default function AdminUsers() {
                             {user.secrets_used}/{user.secrets_limit}
                           </span>
                           {user.secrets_limit_override !== null && (
+                            <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              custom
+                            </span>
+                          )}
+                          <Pencil size={12} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">
+                      {editRecipientsUserId === user.id ? (
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder={String(tiers.find((t) => t.tier === user.tier)?.recipients_limit ?? user.recipients_limit)}
+                            value={editRecipientsValue}
+                            onChange={(e) => setEditRecipientsValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRecipientsSave(user.id)
+                              if (e.key === "Escape") setEditRecipientsUserId(null)
+                            }}
+                            className="w-20 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-white"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditRecipientsUserId(null)}
+                            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                          >
+                            <X size={14} />
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditRecipientsUserId(user.id)
+                            setEditRecipientsValue(
+                              user.recipients_limit_override !== null
+                                ? String(user.recipients_limit_override)
+                                : "",
+                            )
+                            setActionError("")
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          title="Click to edit recipients limit"
+                        >
+                          <span>{user.recipients_limit}</span>
+                          {user.recipients_limit_override !== null && (
                             <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                               custom
                             </span>

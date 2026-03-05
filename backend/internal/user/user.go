@@ -40,6 +40,7 @@ type AdminRepository interface {
 	UpsertLimits(ctx context.Context, tl *TierLimits) error
 	DeleteLimits(ctx context.Context, tier string) error
 	UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error
+	UpdateRecipientsLimitOverride(ctx context.Context, id int64, limit *int) error
 	TierExists(ctx context.Context, tier string) (bool, error)
 }
 

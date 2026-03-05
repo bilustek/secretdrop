@@ -1033,6 +1033,7 @@ type mockAdminRepo struct {
 	updateTierFunc             func(ctx context.Context, id int64, tier string) error
 	tierExistsFunc             func(ctx context.Context, tier string) (bool, error)
 	updateSecretsLimitFunc     func(ctx context.Context, id int64, limit *int) error
+	updateRecipientsLimitFunc  func(ctx context.Context, id int64, limit *int) error
 	findSubscriptionByUserFunc func(ctx context.Context, id int64) (*model.Subscription, error)
 	updateSubStatusFunc        func(ctx context.Context, stripeSubID, status string) error
 }
@@ -1107,7 +1108,10 @@ func (m *mockAdminRepo) CountUsers(ctx context.Context, opts ...user.ListOption)
 	return 0, nil
 }
 
-func (m *mockAdminRepo) ListSubscriptions(ctx context.Context, opts ...user.ListOption) ([]*user.SubscriptionWithUser, error) {
+func (m *mockAdminRepo) ListSubscriptions(
+	ctx context.Context,
+	opts ...user.ListOption,
+) ([]*user.SubscriptionWithUser, error) {
 	if m.listSubscriptionsFunc != nil {
 		return m.listSubscriptionsFunc(ctx, opts...)
 	}
@@ -1150,6 +1154,14 @@ func (m *mockAdminRepo) DeleteLimits(ctx context.Context, tier string) error {
 func (m *mockAdminRepo) UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error {
 	if m.updateSecretsLimitFunc != nil {
 		return m.updateSecretsLimitFunc(ctx, id, limit)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateRecipientsLimitOverride(ctx context.Context, id int64, limit *int) error {
+	if m.updateRecipientsLimitFunc != nil {
+		return m.updateRecipientsLimitFunc(ctx, id, limit)
 	}
 
 	return nil
