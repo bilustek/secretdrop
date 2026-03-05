@@ -1137,3 +1137,475 @@ func TestUpdateTimezone_NotFound(t *testing.T) {
 		t.Errorf("UpdateTimezone() error = %v; want model.ErrNotFound", err)
 	}
 }
+
+func TestNew_InvalidDSN(t *testing.T) {
+	t.Parallel()
+
+	// Use a path that cannot be opened as a database file.
+	_, err := sqlite.New("/nonexistent/path/to/db.sqlite")
+	if err == nil {
+		t.Fatal("New() with invalid DSN should return error")
+	}
+}
+
+func TestClose_Success(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	// Close should succeed.
+	if err := repo.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	// Verify that the database is actually closed by trying to use it.
+	ctx := context.Background()
+
+	_, err = repo.FindByID(ctx, 1)
+	if err == nil {
+		t.Error("FindByID() after Close() should return error")
+	}
+}
+
+func TestUpdateSubscriptionPeriod(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	_, sub := createTestUserAndSubscription(t, repo)
+	ctx := context.Background()
+
+	newStart := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	newEnd := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	if err := repo.UpdateSubscriptionPeriod(ctx, sub.StripeSubscriptionID, newStart, newEnd); err != nil {
+		t.Fatalf("UpdateSubscriptionPeriod() error = %v", err)
+	}
+
+	found, err := repo.FindSubscriptionByUserID(ctx, sub.UserID)
+	if err != nil {
+		t.Fatalf("FindSubscriptionByUserID() error = %v", err)
+	}
+
+	if !found.CurrentPeriodStart.Equal(newStart) {
+		t.Errorf("CurrentPeriodStart = %v; want %v", found.CurrentPeriodStart, newStart)
+	}
+
+	if !found.CurrentPeriodEnd.Equal(newEnd) {
+		t.Errorf("CurrentPeriodEnd = %v; want %v", found.CurrentPeriodEnd, newEnd)
+	}
+}
+
+func TestUpdateSubscriptionPeriod_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	err := repo.UpdateSubscriptionPeriod(ctx, "sub_nonexistent",
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("UpdateSubscriptionPeriod() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestDeleteUser_UserWithoutSubscription_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// Deleting a non-existent user should return ErrNotFound.
+	err := repo.DeleteUser(ctx, 99999)
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("DeleteUser() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestDeleteUser_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	u, err := repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-del-closed",
+		Email:      "del-closed@example.com",
+		Name:       "Del Closed",
+	})
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	// After close, DeleteUser should fail.
+	if err := repo.DeleteUser(ctx, u.ID); err == nil {
+		t.Error("DeleteUser() after Close() should return error")
+	}
+}
+
+func TestUpsertSubscription_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	sub := &model.Subscription{
+		UserID:               1,
+		StripeCustomerID:     "cus_closed",
+		StripeSubscriptionID: "sub_closed",
+		Status:               model.SubscriptionActive,
+		CurrentPeriodStart:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CurrentPeriodEnd:     time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	if err := repo.UpsertSubscription(ctx, sub); err == nil {
+		t.Error("UpsertSubscription() after Close() should return error")
+	}
+}
+
+func TestUpsertLimits_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	tl := &user.TierLimits{
+		Tier:            "test",
+		SecretsLimit:    10,
+		RecipientsLimit: 2,
+	}
+
+	if err := repo.UpsertLimits(ctx, tl); err == nil {
+		t.Error("UpsertLimits() after Close() should return error")
+	}
+}
+
+func TestListLimits_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.ListLimits(ctx)
+	if err == nil {
+		t.Error("ListLimits() after Close() should return error")
+	}
+}
+
+func TestDeleteLimits_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.DeleteLimits(ctx, "free"); err == nil {
+		t.Error("DeleteLimits() after Close() should return error")
+	}
+}
+
+func TestUpdateSecretsLimitOverride_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+	limit := 100
+
+	if err := repo.UpdateSecretsLimitOverride(ctx, 1, &limit); err == nil {
+		t.Error("UpdateSecretsLimitOverride() after Close() should return error")
+	}
+}
+
+func TestTierExists_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.TierExists(ctx, "free")
+	if err == nil {
+		t.Error("TierExists() after Close() should return error")
+	}
+}
+
+func TestGetLimits_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.GetLimits(ctx, "free")
+	if err == nil {
+		t.Error("GetLimits() after Close() should return error")
+	}
+}
+
+func TestFindByID_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.FindByID(ctx, 1)
+	if err == nil {
+		t.Error("FindByID() after Close() should return error")
+	}
+
+	// The error should NOT be model.ErrNotFound; it should be a DB error.
+	if errors.Is(err, model.ErrNotFound) {
+		t.Error("FindByID() after Close() should return DB error, not model.ErrNotFound")
+	}
+}
+
+func TestFindByProvider_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.FindByProvider(ctx, "google", "g-1")
+	if err == nil {
+		t.Error("FindByProvider() after Close() should return error")
+	}
+
+	if errors.Is(err, model.ErrNotFound) {
+		t.Error("FindByProvider() after Close() should return DB error, not model.ErrNotFound")
+	}
+}
+
+func TestFindSubscriptionByUserID_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.FindSubscriptionByUserID(ctx, 1)
+	if err == nil {
+		t.Error("FindSubscriptionByUserID() after Close() should return error")
+	}
+
+	if errors.Is(err, model.ErrNotFound) {
+		t.Error("FindSubscriptionByUserID() after Close() should return DB error, not model.ErrNotFound")
+	}
+}
+
+func TestFindUserByStripeCustomerID_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.FindUserByStripeCustomerID(ctx, "cus_1")
+	if err == nil {
+		t.Error("FindUserByStripeCustomerID() after Close() should return error")
+	}
+
+	if errors.Is(err, model.ErrNotFound) {
+		t.Error("FindUserByStripeCustomerID() after Close() should return DB error, not model.ErrNotFound")
+	}
+}
+
+func TestUpsert_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.Upsert(ctx, &model.User{
+		Provider:   "google",
+		ProviderID: "g-closed",
+		Email:      "closed@example.com",
+		Name:       "Closed",
+	})
+	if err == nil {
+		t.Error("Upsert() after Close() should return error")
+	}
+}
+
+func TestIncrementSecretsUsed_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.IncrementSecretsUsed(ctx, 1); err == nil {
+		t.Error("IncrementSecretsUsed() after Close() should return error")
+	}
+}
+
+func TestResetSecretsUsed_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.ResetSecretsUsed(ctx, 1); err == nil {
+		t.Error("ResetSecretsUsed() after Close() should return error")
+	}
+}
+
+func TestUpdateTier_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.UpdateTier(ctx, 1, model.TierPro); err == nil {
+		t.Error("UpdateTier() after Close() should return error")
+	}
+}
+
+func TestUpdateTimezone_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.UpdateTimezone(ctx, 1, "UTC"); err == nil {
+		t.Error("UpdateTimezone() after Close() should return error")
+	}
+}
+
+func TestUpdateSubscriptionStatus_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	if err := repo.UpdateSubscriptionStatus(ctx, "sub_1", model.SubscriptionCanceled); err == nil {
+		t.Error("UpdateSubscriptionStatus() after Close() should return error")
+	}
+}
+
+func TestUpdateSubscriptionPeriod_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	err = repo.UpdateSubscriptionPeriod(ctx, "sub_1",
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	)
+	if err == nil {
+		t.Error("UpdateSubscriptionPeriod() after Close() should return error")
+	}
+}

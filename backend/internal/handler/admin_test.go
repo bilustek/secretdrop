@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilustek/secretdrop/internal/handler"
 	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/user"
 	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
 )
 
@@ -1015,5 +1017,847 @@ func TestAdminListUsers_WithEffectiveLimit(t *testing.T) {
 	// the seeded free tier default (5) from the limits table.
 	if resp.Users[0].SecretsLimit != model.FreeTierLimit {
 		t.Errorf("secrets_limit = %d; want %d", resp.Users[0].SecretsLimit, model.FreeTierLimit)
+	}
+}
+
+// --- mockAdminRepo for error-path testing ---
+
+type mockAdminRepo struct {
+	listUsersFunc              func(ctx context.Context, opts ...user.ListOption) ([]*model.User, error)
+	countUsersFunc             func(ctx context.Context, opts ...user.ListOption) (int64, error)
+	listSubscriptionsFunc      func(ctx context.Context, opts ...user.ListOption) ([]*user.SubscriptionWithUser, error)
+	countSubscriptionsFunc     func(ctx context.Context, opts ...user.ListOption) (int64, error)
+	listLimitsFunc             func(ctx context.Context) ([]*user.TierLimits, error)
+	upsertLimitsFunc           func(ctx context.Context, tl *user.TierLimits) error
+	deleteLimitsFunc           func(ctx context.Context, tier string) error
+	updateTierFunc             func(ctx context.Context, id int64, tier string) error
+	tierExistsFunc             func(ctx context.Context, tier string) (bool, error)
+	updateSecretsLimitFunc     func(ctx context.Context, id int64, limit *int) error
+	findSubscriptionByUserFunc func(ctx context.Context, id int64) (*model.Subscription, error)
+	updateSubStatusFunc        func(ctx context.Context, stripeSubID, status string) error
+}
+
+func (m *mockAdminRepo) Upsert(_ context.Context, _ *model.User) (*model.User, error) {
+	return nil, nil
+}
+
+func (m *mockAdminRepo) FindByID(_ context.Context, _ int64) (*model.User, error) {
+	return nil, nil
+}
+
+func (m *mockAdminRepo) FindByProvider(_ context.Context, _, _ string) (*model.User, error) {
+	return nil, nil
+}
+
+func (m *mockAdminRepo) IncrementSecretsUsed(_ context.Context, _ int64) error { return nil }
+func (m *mockAdminRepo) ResetSecretsUsed(_ context.Context, _ int64) error     { return nil }
+
+func (m *mockAdminRepo) UpdateTier(ctx context.Context, id int64, tier string) error {
+	if m.updateTierFunc != nil {
+		return m.updateTierFunc(ctx, id, tier)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateTimezone(_ context.Context, _ int64, _ string) error { return nil }
+func (m *mockAdminRepo) DeleteUser(_ context.Context, _ int64) error               { return nil }
+
+func (m *mockAdminRepo) UpsertSubscription(_ context.Context, _ *model.Subscription) error {
+	return nil
+}
+
+func (m *mockAdminRepo) FindSubscriptionByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
+	if m.findSubscriptionByUserFunc != nil {
+		return m.findSubscriptionByUserFunc(ctx, userID)
+	}
+
+	return nil, model.ErrNotFound
+}
+
+func (m *mockAdminRepo) FindUserByStripeCustomerID(_ context.Context, _ string) (*model.User, error) {
+	return nil, nil
+}
+
+func (m *mockAdminRepo) UpdateSubscriptionStatus(ctx context.Context, stripeSubID, status string) error {
+	if m.updateSubStatusFunc != nil {
+		return m.updateSubStatusFunc(ctx, stripeSubID, status)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateSubscriptionPeriod(_ context.Context, _ string, _, _ time.Time) error {
+	return nil
+}
+
+func (m *mockAdminRepo) ListUsers(ctx context.Context, opts ...user.ListOption) ([]*model.User, error) {
+	if m.listUsersFunc != nil {
+		return m.listUsersFunc(ctx, opts...)
+	}
+
+	return nil, nil
+}
+
+func (m *mockAdminRepo) CountUsers(ctx context.Context, opts ...user.ListOption) (int64, error) {
+	if m.countUsersFunc != nil {
+		return m.countUsersFunc(ctx, opts...)
+	}
+
+	return 0, nil
+}
+
+func (m *mockAdminRepo) ListSubscriptions(ctx context.Context, opts ...user.ListOption) ([]*user.SubscriptionWithUser, error) {
+	if m.listSubscriptionsFunc != nil {
+		return m.listSubscriptionsFunc(ctx, opts...)
+	}
+
+	return nil, nil
+}
+
+func (m *mockAdminRepo) CountSubscriptions(ctx context.Context, opts ...user.ListOption) (int64, error) {
+	if m.countSubscriptionsFunc != nil {
+		return m.countSubscriptionsFunc(ctx, opts...)
+	}
+
+	return 0, nil
+}
+
+func (m *mockAdminRepo) ListLimits(ctx context.Context) ([]*user.TierLimits, error) {
+	if m.listLimitsFunc != nil {
+		return m.listLimitsFunc(ctx)
+	}
+
+	return nil, nil
+}
+
+func (m *mockAdminRepo) UpsertLimits(ctx context.Context, tl *user.TierLimits) error {
+	if m.upsertLimitsFunc != nil {
+		return m.upsertLimitsFunc(ctx, tl)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) DeleteLimits(ctx context.Context, tier string) error {
+	if m.deleteLimitsFunc != nil {
+		return m.deleteLimitsFunc(ctx, tier)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error {
+	if m.updateSecretsLimitFunc != nil {
+		return m.updateSecretsLimitFunc(ctx, id, limit)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) TierExists(ctx context.Context, tier string) (bool, error) {
+	if m.tierExistsFunc != nil {
+		return m.tierExistsFunc(ctx, tier)
+	}
+
+	return true, nil
+}
+
+func (m *mockAdminRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits, error) {
+	return nil, model.ErrNotFound
+}
+
+// --- ListUsers error paths ---
+
+func TestAdminListUsers_ListError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminListUsers_CountError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 0, fmt.Errorf("count error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminListUsers_BuildLimitsMapError(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "a@b.com", Name: "A", Provider: "google", Tier: model.TierFree, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return nil, fmt.Errorf("limits error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	// Should still succeed; buildLimitsMap error is not fatal, falls back to hardcoded.
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	// With nil limitsMap, computeEffectiveLimit falls back to FreeTierLimit.
+	if resp.Users[0].SecretsLimit != model.FreeTierLimit {
+		t.Errorf("secrets_limit = %d; want %d", resp.Users[0].SecretsLimit, model.FreeTierLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveLimit_ProTierFallback(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "pro@b.com", Name: "Pro", Provider: "google", Tier: model.TierPro, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			// Return empty map so no tier match, triggers pro fallback.
+			return []*user.TierLimits{}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].SecretsLimit != model.ProTierLimit {
+		t.Errorf("secrets_limit = %d; want %d", resp.Users[0].SecretsLimit, model.ProTierLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveLimit_Override(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	overrideVal := 999
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{
+					ID: 1, Email: "override@b.com", Name: "Override",
+					Provider: "google", Tier: model.TierFree,
+					SecretsLimitOverride: &overrideVal, CreatedAt: now,
+				},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierFree, SecretsLimit: 5, RecipientsLimit: 1},
+			}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].SecretsLimit != 999 {
+		t.Errorf("secrets_limit = %d; want 999", resp.Users[0].SecretsLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveLimit_TierFromLimitsMap(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "pro@b.com", Name: "Pro", Provider: "google", Tier: model.TierPro, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierPro, SecretsLimit: 200, RecipientsLimit: 10},
+			}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	// Should use the value from limitsMap, not the hardcoded ProTierLimit.
+	if resp.Users[0].SecretsLimit != 200 {
+		t.Errorf("secrets_limit = %d; want 200", resp.Users[0].SecretsLimit)
+	}
+}
+
+// --- UpdateUser error paths ---
+
+func TestAdminUpdateUser_TierExistsError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		tierExistsFunc: func(_ context.Context, _ string) (bool, error) {
+			return false, fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminUpdateUser_UpdateTierInternalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		tierExistsFunc: func(_ context.Context, _ string) (bool, error) {
+			return true, nil
+		},
+		updateTierFunc: func(_ context.Context, _ int64, _ string) error {
+			return fmt.Errorf("db write error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminUpdateUser_NegativeSecretsLimitOverride(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	u, _ := repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "neg@example.com", Name: "Neg User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"secrets_limit_override":-5}`)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d", u.ID), body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpdateUser_ZeroSecretsLimitOverride(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	u, _ := repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "zero@example.com", Name: "Zero User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"secrets_limit_override":0}`)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/admin/users/%d", u.ID), body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpdateUser_OverrideNotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		updateSecretsLimitFunc: func(_ context.Context, _ int64, _ *int) error {
+			return model.ErrNotFound
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"secrets_limit_override":100}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/9999", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminUpdateUser_OverrideInternalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		updateSecretsLimitFunc: func(_ context.Context, _ int64, _ *int) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"secrets_limit_override":100}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminUpdateUser_ClearSecretsLimitNotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		updateSecretsLimitFunc: func(_ context.Context, _ int64, _ *int) error {
+			return model.ErrNotFound
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"clear_secrets_limit":true}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/9999", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminUpdateUser_ClearSecretsLimitInternalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		updateSecretsLimitFunc: func(_ context.Context, _ int64, _ *int) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", h.UpdateUser)
+
+	body := strings.NewReader(`{"clear_secrets_limit":true}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/1", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- ListSubscriptions error paths ---
+
+func TestAdminListSubscriptions_Empty(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/subscriptions", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListSubscriptions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminSubscriptionsListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Total != 0 {
+		t.Errorf("total = %d; want 0", resp.Total)
+	}
+}
+
+func TestAdminListSubscriptions_Pagination(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/subscriptions?page=2&per_page=5", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListSubscriptions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminSubscriptionsListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Page != 2 {
+		t.Errorf("page = %d; want 2", resp.Page)
+	}
+
+	if resp.PerPage != 5 {
+		t.Errorf("per_page = %d; want 5", resp.PerPage)
+	}
+}
+
+func TestAdminListSubscriptions_ListError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listSubscriptionsFunc: func(_ context.Context, _ ...user.ListOption) ([]*user.SubscriptionWithUser, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/subscriptions", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListSubscriptions(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminListSubscriptions_CountError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listSubscriptionsFunc: func(_ context.Context, _ ...user.ListOption) ([]*user.SubscriptionWithUser, error) {
+			return []*user.SubscriptionWithUser{}, nil
+		},
+		countSubscriptionsFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 0, fmt.Errorf("count error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/subscriptions", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListSubscriptions(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- ListLimits error path ---
+
+func TestAdminListLimits_Error(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/limits", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListLimits(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- UpsertLimits error paths ---
+
+func TestAdminUpsertLimits_InvalidRecipientsLimit(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`{"secrets_limit":10,"recipients_limit":0}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpsertLimits_NegativeRecipientsLimit(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`{"secrets_limit":10,"recipients_limit":-1}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminUpsertLimits_RepoError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		upsertLimitsFunc: func(_ context.Context, _ *user.TierLimits) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/admin/limits/{tier}", h.UpsertLimits)
+
+	body := strings.NewReader(`{"secrets_limit":10,"recipients_limit":5}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/limits/vip", body)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- DeleteLimits error path ---
+
+func TestAdminDeleteLimits_InternalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		deleteLimitsFunc: func(_ context.Context, _ string) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/limits/{tier}", h.DeleteLimits)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/limits/vip", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- CancelSubscription error paths ---
+
+func TestAdminCancelSubscription_FindInternalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		findSubscriptionByUserFunc: func(_ context.Context, _ int64) (*model.Subscription, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/subscriptions/{id}", h.CancelSubscription)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/subscriptions/1", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestAdminCancelSubscription_UpdateTierError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		findSubscriptionByUserFunc: func(_ context.Context, _ int64) (*model.Subscription, error) {
+			return &model.Subscription{
+				StripeSubscriptionID: "sub_1",
+				UserID:               1,
+			}, nil
+		},
+		updateTierFunc: func(_ context.Context, _ int64, _ string) error {
+			return fmt.Errorf("tier update error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/subscriptions/{id}", h.CancelSubscription)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/subscriptions/1", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	// UpdateTier error is logged but not fatal; should still return 204.
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestAdminCancelSubscription_UpdateStatusError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		findSubscriptionByUserFunc: func(_ context.Context, _ int64) (*model.Subscription, error) {
+			return &model.Subscription{
+				StripeSubscriptionID: "sub_1",
+				UserID:               1,
+			}, nil
+		},
+		updateSubStatusFunc: func(_ context.Context, _, _ string) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/admin/subscriptions/{id}", h.CancelSubscription)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/subscriptions/1", nil)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
 	}
 }

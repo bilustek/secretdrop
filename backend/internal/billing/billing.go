@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/stripe/stripe-go/v82"
 
@@ -86,6 +87,7 @@ type Service struct {
 	notifier        slack.Notifier
 	projectMetaKey  string
 	projectMetaVal  string
+	retryBackoffs   []time.Duration
 }
 
 // New creates a new billing Service.
@@ -113,6 +115,7 @@ func New(
 		webhookSecret: webhookSecret,
 		userRepo:      userRepo,
 		stripeClient:  &stripeClientAdapter{client: sc},
+		retryBackoffs: defaultRetryBackoffs,
 	}
 
 	for _, opt := range opts {

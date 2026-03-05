@@ -2,16 +2,88 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/bilustek/secretdrop/internal/email/noop"
 	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/repository"
 	"github.com/bilustek/secretdrop/internal/repository/sqlite"
 	"github.com/bilustek/secretdrop/internal/service"
+	"github.com/bilustek/secretdrop/internal/user"
 	usersqlite "github.com/bilustek/secretdrop/internal/user/sqlite"
+
+	"github.com/bilustek/secretdropvault"
 )
+
+// hashEmail is a test helper that wraps secretdropvault.HashEmail.
+func hashEmail(email string) string {
+	return secretdropvault.HashEmail(email)
+}
+
+// errSend is a sentinel error for failing email sends.
+var errSend = errors.New("send failed")
+
+// failSender is an email.Sender that always returns an error.
+type failSender struct{}
+
+func (f *failSender) Send(context.Context, string, string, string) error {
+	return errSend
+}
+
+// mockRepo wraps a real repository but can inject errors.
+type mockRepo struct {
+	repository.Repository
+	findResult  *model.Secret
+	findErr     error
+	storeErr    error
+	deleteErr   error
+	deleteCalls int
+}
+
+func (m *mockRepo) FindByTokenAndHash(_ context.Context, _, _ string) (*model.Secret, error) {
+	if m.findErr != nil {
+		return nil, m.findErr
+	}
+
+	return m.findResult, nil
+}
+
+func (m *mockRepo) Delete(_ context.Context, _ int64) error {
+	m.deleteCalls++
+
+	return m.deleteErr
+}
+
+func (m *mockRepo) Store(_ context.Context, _ *model.Secret) error { return m.storeErr }
+func (m *mockRepo) Close() error                                   { return nil }
+
+// mockUserRepo is a minimal user.Repository for testing error paths.
+type mockUserRepo struct {
+	user.Repository
+	findByIDResult   *model.User
+	findByIDErr      error
+	getLimitsResult  *user.TierLimits
+	getLimitsErr     error
+	incrementErr     error
+	incrementCalled  bool
+}
+
+func (m *mockUserRepo) FindByID(_ context.Context, _ int64) (*model.User, error) {
+	return m.findByIDResult, m.findByIDErr
+}
+
+func (m *mockUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits, error) {
+	return m.getLimitsResult, m.getLimitsErr
+}
+
+func (m *mockUserRepo) IncrementSecretsUsed(_ context.Context, _ int64) error {
+	m.incrementCalled = true
+
+	return m.incrementErr
+}
 
 func newTestService(t *testing.T) (*service.SecretService, *sqlite.Repository, *noop.Sender) {
 	t.Helper()
@@ -738,6 +810,544 @@ func TestCreate_ProUserMultipleRecipients(t *testing.T) {
 	})
 	if createErr != nil {
 		t.Fatalf("Create() error = %v; pro user should allow 5 recipients", createErr)
+	}
+}
+
+// --- Option error path tests ---
+
+func TestWithBaseURL_EmptyError(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	_, err = service.New(repo, noop.New(), service.WithBaseURL(""))
+	if err == nil {
+		t.Fatal("New() with empty base URL should return error")
+	}
+
+	if !strings.Contains(err.Error(), "base URL cannot be empty") {
+		t.Errorf("error = %q; want to contain %q", err.Error(), "base URL cannot be empty")
+	}
+}
+
+func TestWithFromEmail_EmptyError(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	_, err = service.New(repo, noop.New(), service.WithFromEmail(""))
+	if err == nil {
+		t.Fatal("New() with empty from email should return error")
+	}
+
+	if !strings.Contains(err.Error(), "from email cannot be empty") {
+		t.Errorf("error = %q; want to contain %q", err.Error(), "from email cannot be empty")
+	}
+}
+
+func TestWithExpiry_NonPositiveError(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	_, err = service.New(repo, noop.New(), service.WithExpiry(0))
+	if err == nil {
+		t.Fatal("New() with zero expiry should return error")
+	}
+
+	if !strings.Contains(err.Error(), "expiry must be positive") {
+		t.Errorf("error = %q; want to contain %q", err.Error(), "expiry must be positive")
+	}
+
+	_, err = service.New(repo, noop.New(), service.WithExpiry(-1*time.Minute))
+	if err == nil {
+		t.Fatal("New() with negative expiry should return error")
+	}
+}
+
+// --- Reveal error path tests ---
+
+func TestReveal_AlreadyViewed(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockRepo{
+		findResult: &model.Secret{
+			ID:        1,
+			Token:     "tok",
+			ExpiresAt: time.Now().Add(10 * time.Minute),
+			Viewed:    true,
+		},
+	}
+
+	svc, err := service.New(
+		repo, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, err = svc.Reveal(context.Background(), "tok", &model.RevealRequest{
+		Email: "test@example.com",
+		Key:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+	})
+	if err == nil {
+		t.Fatal("Reveal() of already-viewed secret should fail")
+	}
+
+	appErr, ok := err.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", err)
+	}
+
+	if appErr.Type != "already_viewed" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "already_viewed")
+	}
+
+	if repo.deleteCalls != 1 {
+		t.Errorf("Delete calls = %d; want 1", repo.deleteCalls)
+	}
+}
+
+func TestReveal_InvalidKey(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockRepo{
+		findResult: &model.Secret{
+			ID:            1,
+			Token:         "tok",
+			EncryptedBlob: []byte("encrypted"),
+			Nonce:         []byte("nonce"),
+			ExpiresAt:     time.Now().Add(10 * time.Minute),
+			Viewed:        false,
+		},
+	}
+
+	svc, err := service.New(
+		repo, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, err = svc.Reveal(context.Background(), "tok", &model.RevealRequest{
+		Email: "test@example.com",
+		Key:   "!!!not-valid-base64!!!",
+	})
+	if err == nil {
+		t.Fatal("Reveal() with invalid key should fail")
+	}
+
+	appErr, ok := err.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", err)
+	}
+
+	if appErr.Type != "decrypt_failed" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "decrypt_failed")
+	}
+}
+
+func TestReveal_DecryptionFailed(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	// Create a real secret
+	resp, err := svc.Create(ctx, 0, &model.CreateRequest{
+		Text: "real-secret",
+		To:   []string{"alice@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	token, _ := parseLinkTokenAndKey(t, resp.Recipients[0].Link)
+
+	// Use correct email (to pass FindByTokenAndHash) but a wrong but valid key
+	// A valid base64 key of correct length (32 bytes) but wrong value
+	wrongKey := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+	_, err = svc.Reveal(ctx, token, &model.RevealRequest{
+		Email: "alice@example.com",
+		Key:   wrongKey,
+	})
+	if err == nil {
+		t.Fatal("Reveal() with wrong key should fail")
+	}
+
+	appErr, ok := err.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", err)
+	}
+
+	if appErr.Type != "decrypt_failed" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "decrypt_failed")
+	}
+}
+
+func TestReveal_DeleteAfterRevealFails(t *testing.T) {
+	t.Parallel()
+
+	// First, create a real secret to get valid encrypted blob + nonce
+	realSvc, realRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	resp, err := realSvc.Create(ctx, 0, &model.CreateRequest{
+		Text: "delete-fail-secret",
+		To:   []string{"carol@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	token, encodedKey := parseLinkTokenAndKey(t, resp.Recipients[0].Link)
+
+	// Fetch the stored secret from the real repo
+	recipientHash := hashEmail("carol@example.com")
+	stored, err := realRepo.FindByTokenAndHash(ctx, token, recipientHash)
+	if err != nil {
+		t.Fatalf("FindByTokenAndHash() error = %v", err)
+	}
+
+	// Now build a mock repo that returns the real secret but fails on Delete
+	mock := &mockRepo{
+		findResult: stored,
+		deleteErr:  errors.New("disk full"),
+	}
+
+	svc, err := service.New(
+		mock, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, err = svc.Reveal(ctx, token, &model.RevealRequest{
+		Email: "carol@example.com",
+		Key:   encodedKey,
+	})
+	if err == nil {
+		t.Fatal("Reveal() should fail when delete fails")
+	}
+
+	if !strings.Contains(err.Error(), "delete secret after reveal") {
+		t.Errorf("error = %q; want to contain %q", err.Error(), "delete secret after reveal")
+	}
+}
+
+func TestReveal_DecryptFailsWithTamperedBlob(t *testing.T) {
+	t.Parallel()
+
+	// Create a real secret, then tamper with the encrypted blob
+	realSvc, realRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	resp, err := realSvc.Create(ctx, 0, &model.CreateRequest{
+		Text: "tamper-test",
+		To:   []string{"dave@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	token, encodedKey := parseLinkTokenAndKey(t, resp.Recipients[0].Link)
+
+	recipientHash := hashEmail("dave@example.com")
+	stored, err := realRepo.FindByTokenAndHash(ctx, token, recipientHash)
+	if err != nil {
+		t.Fatalf("FindByTokenAndHash() error = %v", err)
+	}
+
+	// Tamper with the encrypted blob to make Decrypt fail
+	tampered := make([]byte, len(stored.EncryptedBlob))
+	copy(tampered, stored.EncryptedBlob)
+
+	for i := range tampered {
+		tampered[i] ^= 0xFF
+	}
+
+	mock := &mockRepo{
+		findResult: &model.Secret{
+			ID:            stored.ID,
+			Token:         stored.Token,
+			EncryptedBlob: tampered,
+			Nonce:         stored.Nonce,
+			RecipientHash: stored.RecipientHash,
+			ExpiresAt:     stored.ExpiresAt,
+			Viewed:        false,
+		},
+	}
+
+	svc, err := service.New(
+		mock, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, err = svc.Reveal(ctx, token, &model.RevealRequest{
+		Email: "dave@example.com",
+		Key:   encodedKey,
+	})
+	if err == nil {
+		t.Fatal("Reveal() with tampered blob should fail")
+	}
+
+	appErr, ok := err.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", err)
+	}
+
+	if appErr.Type != "decrypt_failed" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "decrypt_failed")
+	}
+}
+
+// --- Create error path tests ---
+
+func TestCreate_FindByIDError(t *testing.T) {
+	t.Parallel()
+
+	userRepo := &mockUserRepo{
+		findByIDErr: errors.New("db connection lost"),
+	}
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	svc, err := service.New(
+		repo, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+		service.WithUserRepo(userRepo),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, createErr := svc.Create(context.Background(), 1, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"test@example.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error when FindByID fails")
+	}
+
+	appErr, ok := createErr.(*model.AppError)
+	if !ok {
+		t.Fatalf("error should be *model.AppError, got %T", createErr)
+	}
+
+	if appErr.Type != "internal_error" {
+		t.Errorf("error type = %q; want %q", appErr.Type, "internal_error")
+	}
+
+	if appErr.StatusCode != 500 {
+		t.Errorf("status code = %d; want 500", appErr.StatusCode)
+	}
+}
+
+func TestCreate_EmailSendError(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	svc, err := service.New(
+		repo, &failSender{},
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, createErr := svc.Create(context.Background(), 0, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"test@example.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error when email send fails")
+	}
+
+	if !strings.Contains(createErr.Error(), "send email") {
+		t.Errorf("error = %q; want to contain %q", createErr.Error(), "send email")
+	}
+}
+
+func TestCreate_IncrementSecretsUsedError(t *testing.T) {
+	t.Parallel()
+
+	userRepo := &mockUserRepo{
+		findByIDResult: &model.User{
+			ID:          1,
+			Tier:        model.TierPro,
+			SecretsUsed: 0,
+		},
+		getLimitsErr: errors.New("no limits"),
+		incrementErr: errors.New("increment failed"),
+	}
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	svc, err := service.New(
+		repo, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+		service.WithUserRepo(userRepo),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	// Should succeed despite IncrementSecretsUsed error (error is logged, not returned)
+	resp, createErr := svc.Create(context.Background(), 1, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"test@example.com"},
+	})
+	if createErr != nil {
+		t.Fatalf("Create() error = %v; should succeed despite increment error", createErr)
+	}
+
+	if len(resp.Recipients) != 1 {
+		t.Errorf("Recipients count = %d; want 1", len(resp.Recipients))
+	}
+
+	if !userRepo.incrementCalled {
+		t.Error("IncrementSecretsUsed should have been called")
+	}
+}
+
+func TestCreate_SenderNameInEmail(t *testing.T) {
+	t.Parallel()
+
+	userRepo := &mockUserRepo{
+		findByIDResult: &model.User{
+			ID:          1,
+			Tier:        model.TierPro,
+			SecretsUsed: 0,
+			Name:        "Alice Sender",
+		},
+		getLimitsErr: errors.New("no limits"),
+	}
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	t.Cleanup(func() { repo.Close() })
+
+	sender := noop.New()
+
+	svc, err := service.New(
+		repo, sender,
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+		service.WithUserRepo(userRepo),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, createErr := svc.Create(context.Background(), 1, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"test@example.com"},
+	})
+	if createErr != nil {
+		t.Fatalf("Create() error = %v", createErr)
+	}
+
+	if len(sender.Calls) != 1 {
+		t.Fatalf("email Calls = %d; want 1", len(sender.Calls))
+	}
+
+	if !strings.Contains(sender.Calls[0].Subject, "Alice Sender") {
+		t.Errorf("subject = %q; want to contain sender name", sender.Calls[0].Subject)
+	}
+}
+
+func TestCreate_StoreError(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockRepo{
+		storeErr: errors.New("disk full"),
+	}
+
+	svc, err := service.New(
+		mock, noop.New(),
+		service.WithBaseURL("http://localhost:3000"),
+		service.WithFromEmail("noreply@test.com"),
+		service.WithExpiry(10*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+
+	_, createErr := svc.Create(context.Background(), 0, &model.CreateRequest{
+		Text: "secret",
+		To:   []string{"test@example.com"},
+	})
+	if createErr == nil {
+		t.Fatal("Create() should return error when Store fails")
+	}
+
+	if !strings.Contains(createErr.Error(), "store secret") {
+		t.Errorf("error = %q; want to contain %q", createErr.Error(), "store secret")
+	}
+}
+
+func TestBuildNotificationEmail_InvalidTimezone(t *testing.T) {
+	t.Parallel()
+
+	expiresAt := time.Date(2026, 3, 2, 15, 4, 0, 0, time.UTC)
+
+	html := service.BuildNotificationEmail("Test", "https://example.com/s/t#k", expiresAt, "Invalid/Timezone")
+
+	// Should fall back to UTC format
+	if !strings.Contains(html, "Mar 2, 2026 at 3:04 PM UTC") {
+		t.Errorf("email should contain UTC fallback time, got:\n%s", html)
 	}
 }
 

@@ -3,6 +3,8 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,10 +21,24 @@ import (
 const (
 	maxWebhookBodySize = 65536 // 64KB
 
+	retryBackoff1s  = 1
+	retryBackoff2s  = 2
+	retryBackoff4s  = 4
+	retryBackoff8s  = 8
+	retryBackoff12s = 12
+
 	slogKeySubscriptionID = "subscription_id"
 	slogKeyUserID         = "user_id"
 	slogKeyCustomerID     = "customer_id"
 )
+
+var defaultRetryBackoffs = []time.Duration{
+	retryBackoff1s * time.Second,
+	retryBackoff2s * time.Second,
+	retryBackoff4s * time.Second,
+	retryBackoff8s * time.Second,
+	retryBackoff12s * time.Second,
+}
 
 // HandleWebhook processes Stripe webhook events.
 // This endpoint has NO auth — it uses Stripe signature verification instead.
@@ -147,7 +163,7 @@ func (s *Service) handleInvoicePaid(ctx context.Context, event stripe.Event) {
 		return
 	}
 
-	u, err := s.userRepo.FindUserByStripeCustomerID(ctx, customerID)
+	u, err := s.findUserWithRetry(ctx, customerID)
 	if err != nil {
 		slog.Error("find user by stripe customer ID", slogKeyError, err, slogKeyCustomerID, customerID)
 
@@ -198,7 +214,7 @@ func (s *Service) handleSubscriptionDeleted(ctx context.Context, event stripe.Ev
 		return
 	}
 
-	u, err := s.userRepo.FindUserByStripeCustomerID(ctx, customerID)
+	u, err := s.findUserWithRetry(ctx, customerID)
 	if err != nil {
 		slog.Error(
 			"find user by stripe customer ID",
@@ -266,7 +282,7 @@ func (s *Service) handleSubscriptionUpdated(ctx context.Context, event stripe.Ev
 		return
 	}
 
-	u, err := s.userRepo.FindUserByStripeCustomerID(ctx, customerID)
+	u, err := s.findUserWithRetry(ctx, customerID)
 	if err != nil {
 		slog.Error(
 			"find user by stripe customer ID",
@@ -297,6 +313,36 @@ func (s *Service) matchesProjectMetadata(event stripe.Event) bool {
 	}
 
 	return raw.Metadata[s.projectMetaKey] == s.projectMetaVal
+}
+
+func (s *Service) findUserWithRetry(ctx context.Context, customerID string) (*model.User, error) {
+	u, err := s.userRepo.FindUserByStripeCustomerID(ctx, customerID)
+	if err == nil {
+		return u, nil
+	}
+
+	if !errors.Is(err, model.ErrNotFound) {
+		return nil, fmt.Errorf("find user by stripe customer ID: %w", err)
+	}
+
+	for _, backoff := range s.retryBackoffs {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("find user by stripe customer ID: %w", ctx.Err())
+		case <-time.After(backoff):
+		}
+
+		u, err = s.userRepo.FindUserByStripeCustomerID(ctx, customerID)
+		if err == nil {
+			return u, nil
+		}
+
+		if !errors.Is(err, model.ErrNotFound) {
+			return nil, fmt.Errorf("find user by stripe customer ID: %w", err)
+		}
+	}
+
+	return nil, fmt.Errorf("find user by stripe customer ID after retries: %w", err)
 }
 
 func tierForStatus(status stripe.SubscriptionStatus) string {
