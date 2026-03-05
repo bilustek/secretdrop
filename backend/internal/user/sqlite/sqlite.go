@@ -82,9 +82,10 @@ func New(dsn string) (*Repository, error) {
 		return nil, fmt.Errorf("run migration: %w", err)
 	}
 
-	// Add secrets_limit column if it doesn't exist (SQLite has no ADD COLUMN IF NOT EXISTS).
+	// Add columns if they don't exist (SQLite has no ADD COLUMN IF NOT EXISTS).
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN secrets_limit INTEGER")
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
+	_, _ = db.Exec("ALTER TABLE users ADD COLUMN recipients_limit INTEGER")
 
 	return &Repository{db: db}, nil
 }
@@ -103,7 +104,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 			avatar_url  = CASE WHEN excluded.avatar_url = '' THEN users.avatar_url ELSE excluded.avatar_url END,
 			updated_at  = CURRENT_TIMESTAMP
 		RETURNING id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone, recipients_limit
 	`
 
 	result := &model.User{}
@@ -127,6 +128,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 		&result.UpdatedAt,
 		&result.SecretsLimitOverride,
 		&result.Timezone,
+		&result.RecipientsLimitOverride,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user: %w", err)
@@ -139,7 +141,7 @@ func (r *Repository) Upsert(ctx context.Context, u *model.User) (*model.User, er
 func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error) {
 	const query = `
 		SELECT id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone, recipients_limit
 		FROM users
 		WHERE id = ?
 	`
@@ -159,6 +161,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
 		&u.Timezone,
+		&u.RecipientsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -176,7 +179,7 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*model.User, error
 func (r *Repository) FindByProvider(ctx context.Context, provider, providerID string) (*model.User, error) {
 	const query = `
 		SELECT id, provider, provider_id, email, name, avatar_url,
-			tier, secrets_used, created_at, updated_at, secrets_limit, timezone
+			tier, secrets_used, created_at, updated_at, secrets_limit, timezone, recipients_limit
 		FROM users
 		WHERE provider = ? AND provider_id = ?
 	`
@@ -196,6 +199,7 @@ func (r *Repository) FindByProvider(ctx context.Context, provider, providerID st
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
 		&u.Timezone,
+		&u.RecipientsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -397,7 +401,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		SELECT u.id, u.provider, u.provider_id,
 			u.email, u.name, u.avatar_url,
 			u.tier, u.secrets_used,
-			u.created_at, u.updated_at, u.secrets_limit, u.timezone
+			u.created_at, u.updated_at, u.secrets_limit, u.timezone, u.recipients_limit
 		FROM users u
 		JOIN subscriptions s ON u.id = s.user_id
 		WHERE s.stripe_customer_id = ?
@@ -418,6 +422,7 @@ func (r *Repository) FindUserByStripeCustomerID(ctx context.Context, customerID 
 		&u.UpdatedAt,
 		&u.SecretsLimitOverride,
 		&u.Timezone,
+		&u.RecipientsLimitOverride,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -497,7 +502,7 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 	q := user.ApplyOptions(opts...)
 
 	query := "SELECT id, provider, provider_id, email, name, avatar_url," +
-		" tier, secrets_used, created_at, updated_at, secrets_limit, timezone FROM users"
+		" tier, secrets_used, created_at, updated_at, secrets_limit, timezone, recipients_limit FROM users"
 	var args []any
 	var clauses []string
 
@@ -509,6 +514,11 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 	if q.Tier != "" {
 		clauses = append(clauses, "tier = ?")
 		args = append(args, q.Tier)
+	}
+
+	if q.Provider != "" {
+		clauses = append(clauses, "provider = ?")
+		args = append(args, q.Provider)
 	}
 
 	if len(clauses) > 0 {
@@ -547,7 +557,7 @@ func (r *Repository) ListUsers(ctx context.Context, opts ...user.ListOption) ([]
 			&u.ID, &u.Provider, &u.ProviderID, &u.Email,
 			&u.Name, &u.AvatarURL, &u.Tier, &u.SecretsUsed,
 			&u.CreatedAt, &u.UpdatedAt, &u.SecretsLimitOverride,
-			&u.Timezone,
+			&u.Timezone, &u.RecipientsLimitOverride,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
@@ -578,6 +588,11 @@ func (r *Repository) CountUsers(ctx context.Context, opts ...user.ListOption) (i
 	if q.Tier != "" {
 		clauses = append(clauses, "tier = ?")
 		args = append(args, q.Tier)
+	}
+
+	if q.Provider != "" {
+		clauses = append(clauses, "provider = ?")
+		args = append(args, q.Provider)
 	}
 
 	if len(clauses) > 0 {
@@ -793,6 +808,28 @@ func (r *Repository) UpdateSecretsLimitOverride(ctx context.Context, id int64, l
 	result, err := r.db.ExecContext(ctx, query, limit, id)
 	if err != nil {
 		return fmt.Errorf("update secrets limit override: %w", err)
+	}
+
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(errFmtRowsAffected, err)
+	}
+
+	if n == 0 {
+		return model.ErrNotFound
+	}
+
+	return nil
+}
+
+// UpdateRecipientsLimitOverride sets or clears the per-user recipients limit override.
+// Pass nil to clear the override.
+func (r *Repository) UpdateRecipientsLimitOverride(ctx context.Context, id int64, limit *int) error {
+	const query = `UPDATE users SET recipients_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	result, err := r.db.ExecContext(ctx, query, limit, id)
+	if err != nil {
+		return fmt.Errorf("update recipients limit override: %w", err)
 	}
 
 	n, err := result.RowsAffected()

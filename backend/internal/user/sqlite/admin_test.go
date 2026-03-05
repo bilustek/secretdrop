@@ -128,6 +128,60 @@ func TestListUsers_FilterByTier(t *testing.T) {
 	}
 }
 
+func TestListUsers_FilterByProvider(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "google@example.com", Name: "Google User",
+	})
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "github", ProviderID: "gh1",
+		Email: "github@example.com", Name: "GitHub User",
+	})
+
+	users, err := repo.ListUsers(ctx, user.WithProvider("github"))
+	if err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+
+	if len(users) != 1 {
+		t.Errorf("len(users) = %d; want 1", len(users))
+	}
+
+	if len(users) > 0 && users[0].Provider != "github" {
+		t.Errorf("provider = %q; want %q", users[0].Provider, "github")
+	}
+}
+
+func TestCountUsers_FilterByProvider(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "google@example.com", Name: "Google User",
+	})
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "github", ProviderID: "gh1",
+		Email: "github@example.com", Name: "GitHub User",
+	})
+
+	count, err := repo.CountUsers(ctx, user.WithProvider("github"))
+	if err != nil {
+		t.Fatalf("CountUsers() error = %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("count = %d; want 1", count)
+	}
+}
+
 func TestListUsers_Sort(t *testing.T) {
 	t.Parallel()
 

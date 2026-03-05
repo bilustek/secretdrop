@@ -89,7 +89,7 @@ export default function Dashboard() {
   if (!auth || !auth.user) return null
 
   const { user, refreshUser } = auth
-  const maxRecipients = user.tier === "pro" ? 5 : 1
+  const maxRecipients = user.recipients_limit
 
   const addEmail = () => {
     const trimmed = emailInput.trim()

@@ -74,6 +74,16 @@ func TestWithTier(t *testing.T) {
 	}
 }
 
+func TestWithProvider(t *testing.T) {
+	t.Parallel()
+
+	q := user.ApplyOptions(user.WithProvider("github"))
+
+	if q.Provider != "github" {
+		t.Errorf("Provider = %q; want %q", q.Provider, "github")
+	}
+}
+
 func TestWithStatus(t *testing.T) {
 	t.Parallel()
 

@@ -167,6 +167,40 @@ func TestAdminListUsers_FilterByTier(t *testing.T) {
 	}
 }
 
+func TestAdminListUsers_FilterByProvider(t *testing.T) {
+	t.Parallel()
+
+	repo := newAdminTestRepo(t)
+	ctx := context.Background()
+
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "google", ProviderID: "g1",
+		Email: "google@example.com", Name: "Google User",
+	})
+	_, _ = repo.Upsert(ctx, &model.User{
+		Provider: "github", ProviderID: "gh1",
+		Email: "github@example.com", Name: "GitHub User",
+	})
+
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users?provider=github", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Total != 1 {
+		t.Errorf("total = %d; want 1", resp.Total)
+	}
+
+	if len(resp.Users) == 1 && resp.Users[0].Provider != "github" {
+		t.Errorf("provider = %q; want %q", resp.Users[0].Provider, "github")
+	}
+}
+
 func TestAdminListUsers_Sort(t *testing.T) {
 	t.Parallel()
 
@@ -1033,6 +1067,7 @@ type mockAdminRepo struct {
 	updateTierFunc             func(ctx context.Context, id int64, tier string) error
 	tierExistsFunc             func(ctx context.Context, tier string) (bool, error)
 	updateSecretsLimitFunc     func(ctx context.Context, id int64, limit *int) error
+	updateRecipientsLimitFunc  func(ctx context.Context, id int64, limit *int) error
 	findSubscriptionByUserFunc func(ctx context.Context, id int64) (*model.Subscription, error)
 	updateSubStatusFunc        func(ctx context.Context, stripeSubID, status string) error
 }
@@ -1107,7 +1142,10 @@ func (m *mockAdminRepo) CountUsers(ctx context.Context, opts ...user.ListOption)
 	return 0, nil
 }
 
-func (m *mockAdminRepo) ListSubscriptions(ctx context.Context, opts ...user.ListOption) ([]*user.SubscriptionWithUser, error) {
+func (m *mockAdminRepo) ListSubscriptions(
+	ctx context.Context,
+	opts ...user.ListOption,
+) ([]*user.SubscriptionWithUser, error) {
 	if m.listSubscriptionsFunc != nil {
 		return m.listSubscriptionsFunc(ctx, opts...)
 	}
@@ -1150,6 +1188,14 @@ func (m *mockAdminRepo) DeleteLimits(ctx context.Context, tier string) error {
 func (m *mockAdminRepo) UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error {
 	if m.updateSecretsLimitFunc != nil {
 		return m.updateSecretsLimitFunc(ctx, id, limit)
+	}
+
+	return nil
+}
+
+func (m *mockAdminRepo) UpdateRecipientsLimitOverride(ctx context.Context, id int64, limit *int) error {
+	if m.updateRecipientsLimitFunc != nil {
+		return m.updateRecipientsLimitFunc(ctx, id, limit)
 	}
 
 	return nil
