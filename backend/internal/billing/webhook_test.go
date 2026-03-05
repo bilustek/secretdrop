@@ -7,14 +7,48 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
 
 	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/slack"
 	"github.com/bilustek/secretdrop/internal/user"
 )
+
+// syncNotifier is a test double for slack.Notifier that supports waiting
+// for the goroutine to complete in tests. Call expect() before the handler
+// runs and wait() after to synchronize with the background goroutine.
+type syncNotifier struct {
+	mu     sync.Mutex
+	wg     sync.WaitGroup
+	called bool
+	event  slack.Event
+	err    error
+}
+
+func (n *syncNotifier) Notify(_ context.Context, ev slack.Event) error {
+	defer n.wg.Done()
+
+	n.mu.Lock()
+	n.called = true
+	n.event = ev
+	n.mu.Unlock()
+
+	return n.err
+}
+
+// expect registers that we expect one notification call.
+func (n *syncNotifier) expect() {
+	n.wg.Add(1)
+}
+
+func (n *syncNotifier) wait() {
+	n.wg.Wait()
+}
 
 type findByStripeResult struct {
 	user *model.User
@@ -736,6 +770,1062 @@ func TestFindUserWithRetry_NonNotFoundError_NoRetry(t *testing.T) {
 
 	if repo.findByStripeCalls != 1 {
 		t.Errorf("calls = %d; want 1 (no retry for non-ErrNotFound)", repo.findByStripeCalls)
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_InvalidClientReferenceID_Empty(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	// Empty client_reference_id will cause ParseInt to fail
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.upsertSubCalled {
+		t.Error("UpsertSubscription should not be called when client_reference_id is empty")
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_InvalidClientReferenceID(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "not-a-number",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.upsertSubCalled {
+		t.Error("UpsertSubscription should not be called when client_reference_id is invalid")
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_UpsertError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		upsertSubErr: errors.New("database error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.upsertSubCalled {
+		t.Fatal("UpsertSubscription should be called")
+	}
+
+	// updateTier should NOT be called when upsert fails (early return)
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should not be called when upsert fails")
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_UpdateTierError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		updateTierErr: errors.New("tier update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should be called even if it errors")
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_NilCustomerAndSubscription(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	// No "customer" or "subscription" fields -> nil pointers in the struct
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.upsertSubCalled {
+		t.Fatal("UpsertSubscription should be called")
+	}
+
+	if repo.upsertSubArg.StripeCustomerID != "" {
+		t.Errorf("customer ID = %q; want empty", repo.upsertSubArg.StripeCustomerID)
+	}
+
+	if repo.upsertSubArg.StripeSubscriptionID != "" {
+		t.Errorf("subscription ID = %q; want empty", repo.upsertSubArg.StripeSubscriptionID)
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_WithNotifier(t *testing.T) {
+	t.Parallel()
+
+	notifier := &syncNotifier{}
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithNotifier(notifier))
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	notifier.expect()
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	notifier.wait()
+
+	if !notifier.called {
+		t.Fatal("notifier should be called")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_NoCustomerID(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":     "in_test_123",
+		"object": "invoice",
+		// no customer field
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.resetSecretsUsedCalled {
+		t.Error("ResetSecretsUsed should not be called when customer ID is missing")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_FindUserError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeErr: errors.New("database error"),
+	}
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = nil // no retries
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.resetSecretsUsedCalled {
+		t.Error("ResetSecretsUsed should not be called when find user fails")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_ResetSecretsError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:    &model.User{ID: 42, Tier: model.TierPro},
+		resetSecretsUsedErr: errors.New("reset error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.resetSecretsUsedCalled {
+		t.Fatal("ResetSecretsUsed should be called")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_WithLineItems(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42, Tier: model.TierPro},
+		subscription: &model.Subscription{
+			StripeSubscriptionID: "sub_test_123",
+		},
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+		"lines": map[string]any{
+			"data": []map[string]any{
+				{
+					"period": map[string]any{
+						"start": 1700000000,
+						"end":   1702592000,
+					},
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.resetSecretsUsedCalled {
+		t.Fatal("ResetSecretsUsed should be called")
+	}
+
+	if !repo.updateSubPeriodCalled {
+		t.Fatal("UpdateSubscriptionPeriod should be called when line items exist")
+	}
+
+	if repo.updateSubPeriodSubID != "sub_test_123" {
+		t.Errorf("period sub ID = %q; want %q", repo.updateSubPeriodSubID, "sub_test_123")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_WithLineItems_PeriodUpdateError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42, Tier: model.TierPro},
+		subscription: &model.Subscription{
+			StripeSubscriptionID: "sub_test_123",
+		},
+		updateSubPeriodErr: errors.New("period update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+		"lines": map[string]any{
+			"data": []map[string]any{
+				{
+					"period": map[string]any{
+						"start": 1700000000,
+						"end":   1702592000,
+					},
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateSubPeriodCalled {
+		t.Fatal("UpdateSubscriptionPeriod should be called")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_WithLineItems_SubscriptionNotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42, Tier: model.TierPro},
+		subscriptionErr:  model.ErrNotFound,
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+		"lines": map[string]any{
+			"data": []map[string]any{
+				{
+					"period": map[string]any{
+						"start": 1700000000,
+						"end":   1702592000,
+					},
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	// period should NOT be updated when subscription is not found
+	if repo.updateSubPeriodCalled {
+		t.Error("UpdateSubscriptionPeriod should not be called when subscription is not found")
+	}
+}
+
+func TestHandleWebhook_SubscriptionDeleted_UpdateStatusError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:   &model.User{ID: 42},
+		updateSubStatusErr: errors.New("status update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "canceled",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateSubStatusCalled {
+		t.Fatal("UpdateSubscriptionStatus should be called even if it errors")
+	}
+
+	// Should still proceed to update tier
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should be called even if status update errors")
+	}
+}
+
+func TestHandleWebhook_SubscriptionDeleted_NoCustomerID(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":     "sub_test_123",
+		"object": "subscription",
+		"status": "canceled",
+		// no customer field
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	// updateTier should NOT be called because we can't find the user without customer ID
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should not be called when customer ID is missing")
+	}
+}
+
+func TestHandleWebhook_SubscriptionDeleted_FindUserError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeErr: errors.New("database error"),
+	}
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = nil
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "canceled",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should not be called when find user fails")
+	}
+}
+
+func TestHandleWebhook_SubscriptionDeleted_UpdateTierError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42},
+		updateTierErr:    errors.New("tier update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "canceled",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should be called even if it errors")
+	}
+}
+
+func TestHandleWebhook_SubscriptionDeleted_WithNotifier(t *testing.T) {
+	t.Parallel()
+
+	notifier := &syncNotifier{}
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42},
+	}
+	svc := newWebhookTestService(t, repo, WithNotifier(notifier))
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "canceled",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	notifier.expect()
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	notifier.wait()
+
+	if !notifier.called {
+		t.Fatal("notifier should be called for subscription deleted")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_UpdateStatusError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:   &model.User{ID: 42},
+		updateSubStatusErr: errors.New("status update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateSubStatusCalled {
+		t.Fatal("UpdateSubscriptionStatus should be called even if it errors")
+	}
+
+	// Should still proceed
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should still be called after status update error")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_WithItems(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42},
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+		"items": map[string]any{
+			"data": []map[string]any{
+				{
+					"id":                   "si_test_123",
+					"current_period_start": 1700000000,
+					"current_period_end":   1702592000,
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateSubPeriodCalled {
+		t.Fatal("UpdateSubscriptionPeriod should be called when items exist")
+	}
+
+	if repo.updateSubPeriodSubID != "sub_test_123" {
+		t.Errorf("period sub ID = %q; want %q", repo.updateSubPeriodSubID, "sub_test_123")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_PeriodUpdateError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:   &model.User{ID: 42},
+		updateSubPeriodErr: errors.New("period update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+		"items": map[string]any{
+			"data": []map[string]any{
+				{
+					"id":                   "si_test_123",
+					"current_period_start": 1700000000,
+					"current_period_end":   1702592000,
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateSubPeriodCalled {
+		t.Fatal("UpdateSubscriptionPeriod should be called even if it errors")
+	}
+
+	// Should still proceed to update tier
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should still be called after period update error")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_NoCustomerID(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":     "sub_test_123",
+		"object": "subscription",
+		"status": "active",
+		// no customer field
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should not be called when customer ID is missing")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_FindUserError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeErr: errors.New("database error"),
+	}
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = nil
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.updateTierCalled {
+		t.Error("UpdateTier should not be called when find user fails")
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_UpdateTierError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42},
+		updateTierErr:    errors.New("tier update error"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier should be called even if it errors")
+	}
+}
+
+func TestHandleCheckoutCompleted_UnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	// Call handleCheckoutCompleted directly with invalid raw data
+	event := stripe.Event{
+		Data: &stripe.EventData{
+			Raw: json.RawMessage(`not valid json`),
+		},
+	}
+
+	svc.handleCheckoutCompleted(context.Background(), event)
+
+	if repo.upsertSubCalled {
+		t.Error("UpsertSubscription should not be called when unmarshal fails")
+	}
+}
+
+func TestHandleInvoicePaid_UnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	event := stripe.Event{
+		Data: &stripe.EventData{
+			Raw: json.RawMessage(`not valid json`),
+		},
+	}
+
+	svc.handleInvoicePaid(context.Background(), event)
+
+	if repo.resetSecretsUsedCalled {
+		t.Error("ResetSecretsUsed should not be called when unmarshal fails")
+	}
+}
+
+func TestHandleSubscriptionDeleted_UnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	event := stripe.Event{
+		Data: &stripe.EventData{
+			Raw: json.RawMessage(`not valid json`),
+		},
+	}
+
+	svc.handleSubscriptionDeleted(context.Background(), event)
+
+	if repo.updateSubStatusCalled {
+		t.Error("UpdateSubscriptionStatus should not be called when unmarshal fails")
+	}
+}
+
+func TestHandleSubscriptionUpdated_UnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	event := stripe.Event{
+		Data: &stripe.EventData{
+			Raw: json.RawMessage(`not valid json`),
+		},
+	}
+
+	svc.handleSubscriptionUpdated(context.Background(), event)
+
+	if repo.updateSubStatusCalled {
+		t.Error("UpdateSubscriptionStatus should not be called when unmarshal fails")
+	}
+}
+
+func TestHandleCheckoutCompleted_NotifierError(t *testing.T) {
+	t.Parallel()
+
+	notifier := &syncNotifier{err: errors.New("slack error")}
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithNotifier(notifier))
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	notifier.expect()
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	notifier.wait()
+
+	// Even with error, notifier was called
+	if !notifier.called {
+		t.Fatal("notifier should be called")
+	}
+}
+
+func TestHandleSubscriptionDeleted_NotifierError(t *testing.T) {
+	t.Parallel()
+
+	notifier := &syncNotifier{err: errors.New("slack error")}
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42},
+	}
+	svc := newWebhookTestService(t, repo, WithNotifier(notifier))
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "canceled",
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.deleted", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	notifier.expect()
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	notifier.wait()
+
+	if !notifier.called {
+		t.Fatal("notifier should be called even if it returns error")
+	}
+}
+
+func TestMatchesProjectMetadata_UnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	event := stripe.Event{
+		Data: &stripe.EventData{
+			Raw: json.RawMessage(`not valid json`),
+		},
+	}
+
+	if svc.matchesProjectMetadata(event) {
+		t.Error("matchesProjectMetadata should return false when unmarshal fails")
+	}
+}
+
+func TestFindUserWithRetry_NonNotFoundErrorOnRetry(t *testing.T) {
+	t.Parallel()
+
+	dbErr := errors.New("database connection failed")
+	repo := &webhookUserRepo{
+		findByStripeResults: []findByStripeResult{
+			{nil, model.ErrNotFound},
+			{nil, dbErr}, // non-NotFound error on retry
+		},
+	}
+
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = []time.Duration{time.Millisecond, time.Millisecond}
+
+	_, err := svc.findUserWithRetry(context.Background(), "cus_test_123")
+	if !errors.Is(err, dbErr) {
+		t.Errorf("findUserWithRetry() error = %v; want %v", err, dbErr)
+	}
+
+	if repo.findByStripeCalls != 2 {
+		t.Errorf("calls = %d; want 2", repo.findByStripeCalls)
 	}
 }
 

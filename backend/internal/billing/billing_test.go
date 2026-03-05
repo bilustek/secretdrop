@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,21 +15,40 @@ import (
 	"github.com/bilustek/secretdrop/internal/auth"
 	"github.com/bilustek/secretdrop/internal/middleware"
 	"github.com/bilustek/secretdrop/internal/model"
+	"github.com/bilustek/secretdrop/internal/slack"
 	"github.com/bilustek/secretdrop/internal/user"
 )
+
+// mockNotifier is a test double for slack.Notifier.
+type mockNotifier struct {
+	called bool
+	event  slack.Event
+	err    error
+}
+
+func (m *mockNotifier) Notify(_ context.Context, ev slack.Event) error {
+	m.called = true
+	m.event = ev
+
+	return m.err
+}
 
 // mockStripeClient is a test double for StripeClient.
 type mockStripeClient struct {
 	checkoutSession *stripe.CheckoutSession
 	checkoutErr     error
+	checkoutParams  *stripe.CheckoutSessionCreateParams
 	portalSession   *stripe.BillingPortalSession
 	portalErr       error
+	cancelErr       error
+	cancelCalledID  string
 }
 
 func (m *mockStripeClient) CreateCheckoutSession(
 	_ context.Context,
-	_ *stripe.CheckoutSessionCreateParams,
+	params *stripe.CheckoutSessionCreateParams,
 ) (*stripe.CheckoutSession, error) {
+	m.checkoutParams = params
 	return m.checkoutSession, m.checkoutErr
 }
 
@@ -39,8 +59,9 @@ func (m *mockStripeClient) CreatePortalSession(
 	return m.portalSession, m.portalErr
 }
 
-func (m *mockStripeClient) CancelSubscription(_ context.Context, _ string) error {
-	return nil
+func (m *mockStripeClient) CancelSubscription(_ context.Context, id string) error {
+	m.cancelCalledID = id
+	return m.cancelErr
 }
 
 // mockUserRepo is a minimal test double for user.Repository.
@@ -129,6 +150,24 @@ func newTestService(t *testing.T, sc StripeClient, repo *mockUserRepo) *Service 
 	}
 
 	return svc
+}
+
+func TestNew_OptionError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockUserRepo{}
+	failOpt := func(_ *Service) error {
+		return errors.New("option failed")
+	}
+
+	_, err := New("sk_test_key", "whsec_test", "price_test", repo, failOpt)
+	if err == nil {
+		t.Fatal("New() error = nil; want error")
+	}
+
+	if !strings.Contains(err.Error(), "apply option") {
+		t.Errorf("error = %q; want to contain %q", err.Error(), "apply option")
+	}
 }
 
 func TestNew_Validation(t *testing.T) {
@@ -505,5 +544,131 @@ func TestHandlePortal_StripeError(t *testing.T) {
 
 	if resp.Error.Message != "Failed to create portal session" {
 		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to create portal session")
+	}
+}
+
+func TestWithPortalReturnURL(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockUserRepo{}
+
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_test",
+		repo,
+		WithPortalReturnURL("https://example.com/dashboard"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.portalReturnURL != "https://example.com/dashboard" {
+		t.Errorf("portalReturnURL = %q; want %q", svc.portalReturnURL, "https://example.com/dashboard")
+	}
+}
+
+func TestWithNotifier(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockUserRepo{}
+	notifier := &mockNotifier{}
+
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_test",
+		repo,
+		WithNotifier(notifier),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.notifier == nil {
+		t.Fatal("notifier should not be nil")
+	}
+}
+
+func TestCancelSubscription_Success(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{}
+	svc := newTestService(t, sc, repo)
+
+	err := svc.CancelSubscription(context.Background(), "sub_test_123")
+	if err != nil {
+		t.Fatalf("CancelSubscription() error = %v; want nil", err)
+	}
+
+	if sc.cancelCalledID != "sub_test_123" {
+		t.Errorf("cancel called with ID = %q; want %q", sc.cancelCalledID, "sub_test_123")
+	}
+}
+
+func TestCancelSubscription_Error(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		cancelErr: errors.New("stripe cancel error"),
+	}
+	repo := &mockUserRepo{}
+	svc := newTestService(t, sc, repo)
+
+	err := svc.CancelSubscription(context.Background(), "sub_test_123")
+	if err == nil {
+		t.Fatal("CancelSubscription() error = nil; want error")
+	}
+}
+
+func TestHandleCheckout_WithProjectMetadata(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		checkoutSession: &stripe.CheckoutSession{URL: "https://checkout.stripe.com/session123"},
+	}
+	repo := &mockUserRepo{}
+
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_test",
+		repo,
+		WithStripeClient(sc),
+		WithSuccessURL("https://example.com/success"),
+		WithCancelURL("https://example.com/cancel"),
+		WithProjectMetadata("project", "secretdrop"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if sc.checkoutParams == nil {
+		t.Fatal("checkout params should not be nil")
+	}
+
+	if sc.checkoutParams.Metadata == nil {
+		t.Fatal("metadata should not be nil when project metadata is set")
+	}
+
+	if sc.checkoutParams.Metadata["project"] != "secretdrop" {
+		t.Errorf("metadata[project] = %q; want %q", sc.checkoutParams.Metadata["project"], "secretdrop")
+	}
+
+	if sc.checkoutParams.SubscriptionData == nil {
+		t.Fatal("subscription data should not be nil when project metadata is set")
 	}
 }
