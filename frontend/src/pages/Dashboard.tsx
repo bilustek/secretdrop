@@ -3,6 +3,7 @@ import { Plus, X, Loader2, Copy, Check, Rocket, Clock } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { api, AppError, type CreateSecretResponse } from "../api/client"
 import { useRecentEmails } from "../hooks/useRecentEmails"
+import { SuccessModal } from "../components/SuccessModal"
 
 const EXPIRY_OPTIONS = [
   { value: "10m", label: "10 minutes" },
@@ -45,6 +46,7 @@ export default function Dashboard() {
   const [emails, setEmails] = useState<string[]>([])
   const [emailInput, setEmailInput] = useState("")
   const [result, setResult] = useState<CreateSecretResponse | null>(null)
+  const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [expiresIn, setExpiresIn] = useState("")
@@ -122,6 +124,7 @@ export default function Dashboard() {
       const response = await api.createSecret({ text, to: emails, expires_in: expiresIn })
       addEmails(emails)
       setResult(response)
+      setShowModal(true)
       setText("")
       setEmails([])
       refreshUser()
@@ -153,6 +156,12 @@ export default function Dashboard() {
   if (result) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-16">
+        {showModal && (
+          <SuccessModal
+            recipients={result.recipients}
+            onClose={() => setShowModal(false)}
+          />
+        )}
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8">
           <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-4">
             <Check size={20} />
