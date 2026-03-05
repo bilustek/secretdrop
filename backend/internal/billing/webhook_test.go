@@ -16,6 +16,11 @@ import (
 	"github.com/bilustek/secretdrop/internal/user"
 )
 
+type findByStripeResult struct {
+	user *model.User
+	err  error
+}
+
 // webhookUserRepo is a test double that tracks all calls for webhook tests.
 type webhookUserRepo struct {
 	// findByID
@@ -25,6 +30,10 @@ type webhookUserRepo struct {
 	// findUserByStripeCustomerID
 	findByStripeUser *model.User
 	findByStripeErr  error
+
+	// sequential results for retry tests (takes priority when non-nil)
+	findByStripeResults []findByStripeResult
+	findByStripeCalls   int
 
 	// upsertSubscription
 	upsertSubCalled bool
@@ -107,6 +116,19 @@ func (m *webhookUserRepo) FindSubscriptionByUserID(_ context.Context, _ int64) (
 }
 
 func (m *webhookUserRepo) FindUserByStripeCustomerID(_ context.Context, _ string) (*model.User, error) {
+	if m.findByStripeResults != nil {
+		i := m.findByStripeCalls
+		m.findByStripeCalls++
+
+		if i < len(m.findByStripeResults) {
+			return m.findByStripeResults[i].user, m.findByStripeResults[i].err
+		}
+
+		last := m.findByStripeResults[len(m.findByStripeResults)-1]
+
+		return last.user, last.err
+	}
+
 	return m.findByStripeUser, m.findByStripeErr
 }
 
@@ -635,5 +657,109 @@ func TestHandleWebhook_NoProjectFilter_ProcessesAll(t *testing.T) {
 
 	if !repo.upsertSubCalled {
 		t.Fatal("UpsertSubscription should be called when no project filter is set")
+	}
+}
+
+func TestFindUserWithRetry_SucceedsAfterRetries(t *testing.T) {
+	t.Parallel()
+
+	wantUser := &model.User{ID: 42, Email: "test@example.com"}
+	repo := &webhookUserRepo{
+		findByStripeResults: []findByStripeResult{
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{wantUser, nil},
+		},
+	}
+
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
+
+	u, err := svc.findUserWithRetry(context.Background(), "cus_test_123")
+	if err != nil {
+		t.Fatalf("findUserWithRetry() error = %v; want nil", err)
+	}
+
+	if u.ID != wantUser.ID {
+		t.Errorf("user ID = %d; want %d", u.ID, wantUser.ID)
+	}
+
+	if repo.findByStripeCalls != 3 {
+		t.Errorf("calls = %d; want 3", repo.findByStripeCalls)
+	}
+}
+
+func TestFindUserWithRetry_AllRetriesExhausted(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeResults: []findByStripeResult{
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+		},
+	}
+
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
+
+	_, err := svc.findUserWithRetry(context.Background(), "cus_test_123")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("findUserWithRetry() error = %v; want model.ErrNotFound", err)
+	}
+
+	// 1 initial + 4 retries = 5
+	if repo.findByStripeCalls != 5 {
+		t.Errorf("calls = %d; want 5", repo.findByStripeCalls)
+	}
+}
+
+func TestFindUserWithRetry_NonNotFoundError_NoRetry(t *testing.T) {
+	t.Parallel()
+
+	dbErr := errors.New("database connection failed")
+	repo := &webhookUserRepo{
+		findByStripeResults: []findByStripeResult{
+			{nil, dbErr},
+		},
+	}
+
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
+
+	_, err := svc.findUserWithRetry(context.Background(), "cus_test_123")
+	if !errors.Is(err, dbErr) {
+		t.Errorf("findUserWithRetry() error = %v; want %v", err, dbErr)
+	}
+
+	if repo.findByStripeCalls != 1 {
+		t.Errorf("calls = %d; want 1 (no retry for non-ErrNotFound)", repo.findByStripeCalls)
+	}
+}
+
+func TestFindUserWithRetry_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeResults: []findByStripeResult{
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+			{nil, model.ErrNotFound},
+		},
+	}
+
+	svc := newWebhookTestService(t, repo)
+	svc.retryBackoffs = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, err := svc.findUserWithRetry(ctx, "cus_test_123")
+	if err == nil {
+		t.Fatal("findUserWithRetry() error = nil; want context error")
 	}
 }
