@@ -162,6 +162,71 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Open Source */}
+      <section className="max-w-4xl mx-auto px-4 pb-8">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-8 sm:p-10">
+          <p className="text-center text-xs font-semibold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2">
+            Open Source
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-2">
+            Trust issues? Good. Read the source.
+          </h2>
+          <p className="text-center text-gray-500 dark:text-gray-400 mb-8 max-w-xl mx-auto">
+            The entire project is public under the MIT license. No hidden endpoints, no secret telemetry, no &ldquo;just trust us&rdquo; moments.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a
+              href="https://github.com/bilustek/secretdrop"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all group"
+            >
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50 transition-colors">
+                <GitHubIcon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  bilustek/secretdrop
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                  Full application &mdash; Go API, React frontend, OAuth, Stripe billing &amp; everything in between.
+                </p>
+                <span className="inline-flex items-center gap-1 mt-2.5 text-xs font-medium text-indigo-500 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                  View on GitHub
+                  <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </span>
+              </div>
+            </a>
+            <a
+              href="https://github.com/bilustek/secretdropvault"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-5 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all group"
+            >
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50 transition-colors">
+                <Shield size={24} className="text-gray-700 dark:text-gray-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  bilustek/secretdropvault
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                  Standalone encryption engine &mdash; AES-256-GCM with HKDF-SHA256 key derivation.
+                </p>
+                <span className="inline-flex items-center gap-1 mt-2.5 text-xs font-medium text-indigo-500 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                  View on GitHub
+                  <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="max-w-5xl mx-auto px-4 py-16">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
@@ -261,16 +326,6 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="mt-14 text-center border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 mb-3">
-              <GitHubIcon className="w-8 h-8 text-gray-700 dark:text-gray-300" />
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed max-w-lg mx-auto">
-              Don't just take our word for it. Our encryption engine is{" "}
-              <a href="https://github.com/bilustek/secretdropvault" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 dark:text-white underline underline-offset-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">open source under the MIT license</a>
-              {" "}&mdash; audit every line of code yourself.
-            </p>
-          </div>
         </div>
       </section>
 
