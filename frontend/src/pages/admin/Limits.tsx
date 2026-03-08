@@ -7,6 +7,9 @@ interface EditRow {
   tier: string
   secrets_limit: string
   recipients_limit: string
+  stripe_price_id: string
+  price_cents: string
+  currency: string
   isNew: boolean
 }
 
@@ -61,6 +64,9 @@ export default function AdminLimits() {
       await adminApi.upsertLimits(editRow.tier.trim().toLowerCase(), {
         secrets_limit: secretsLimit,
         recipients_limit: recipientsLimit,
+        stripe_price_id: editRow.stripe_price_id ?? "",
+        price_cents: parseInt(editRow.price_cents, 10) || 0,
+        currency: editRow.currency ?? "usd",
       })
       setEditRow(null)
       await fetchLimits()
@@ -85,6 +91,9 @@ export default function AdminLimits() {
       tier: tl.tier,
       secrets_limit: String(tl.secrets_limit),
       recipients_limit: String(tl.recipients_limit),
+      stripe_price_id: tl.stripe_price_id,
+      price_cents: String(tl.price_cents),
+      currency: tl.currency,
       isNew: false,
     })
     setActionError("")
@@ -95,6 +104,9 @@ export default function AdminLimits() {
       tier: "",
       secrets_limit: "100",
       recipients_limit: "5",
+      stripe_price_id: "",
+      price_cents: "0",
+      currency: "usd",
       isNew: true,
     })
     setActionError("")

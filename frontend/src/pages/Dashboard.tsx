@@ -145,7 +145,7 @@ export default function Dashboard() {
 
   const handleUpgrade = async () => {
     try {
-      const { url } = await api.checkout()
+      const { url } = await api.checkout("pro")
       window.location.href = url
     } catch {
       setError("Failed to start checkout. Please try again.")

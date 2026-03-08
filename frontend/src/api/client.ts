@@ -149,6 +149,15 @@ export interface CheckoutResponse {
   url: string
 }
 
+export interface Plan {
+  tier: string
+  secrets_limit: number
+  recipients_limit: number
+  max_text_length: number
+  price_cents: number
+  currency: string
+}
+
 async function softAuthFetch<T>(path: string): Promise<T> {
   const url = `${API_BASE}${path}`
   const opts: RequestInit = {
@@ -196,9 +205,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  checkout: () =>
+  plans: () =>
+    fetch(`${API_BASE}/plans`, {
+      headers: { "Content-Type": "application/json" },
+    }).then((r) => r.json() as Promise<Plan[]>),
+
+  checkout: (tier: string) =>
     authenticatedFetch(`${API_URL}/billing/checkout`, {
       method: "POST",
+      body: JSON.stringify({ tier }),
     }).then((r) => r.json() as Promise<CheckoutResponse>),
 
   portal: () =>
