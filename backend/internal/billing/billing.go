@@ -84,6 +84,7 @@ type Service struct {
 	successURL      string
 	cancelURL       string
 	portalReturnURL string
+	portalConfigID  string
 	notifier        slack.Notifier
 	projectMetaKey  string
 	projectMetaVal  string
@@ -149,6 +150,15 @@ func WithCancelURL(url string) Option {
 func WithPortalReturnURL(url string) Option {
 	return func(s *Service) error {
 		s.portalReturnURL = url
+
+		return nil
+	}
+}
+
+// WithPortalConfigID sets the Stripe Billing Portal configuration ID.
+func WithPortalConfigID(id string) Option {
+	return func(s *Service) error {
+		s.portalConfigID = id
 
 		return nil
 	}
@@ -277,6 +287,10 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 		params := &stripe.BillingPortalSessionCreateParams{
 			Customer:  stripe.String(sub.StripeCustomerID),
 			ReturnURL: stripe.String(s.portalReturnURL),
+		}
+
+		if s.portalConfigID != "" {
+			params.Configuration = stripe.String(s.portalConfigID)
 		}
 
 		sess, err := s.stripeClient.CreatePortalSession(r.Context(), params)

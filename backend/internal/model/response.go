@@ -34,6 +34,16 @@ type MeResponse struct {
 	Timezone        string `json:"timezone"`
 }
 
+// PlanResponse is a single plan in the public pricing endpoint.
+type PlanResponse struct {
+	Tier            string `json:"tier"`
+	SecretsLimit    int    `json:"secrets_limit"`
+	RecipientsLimit int    `json:"recipients_limit"`
+	MaxTextLength   int    `json:"max_text_length"`
+	PriceCents      int    `json:"price_cents"`
+	Currency        string `json:"currency"`
+}
+
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`

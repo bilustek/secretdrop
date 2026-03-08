@@ -93,7 +93,9 @@ func New(dsn string) (*Repository, error) {
 	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN stripe_price_id TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN price_cents INTEGER NOT NULL DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN currency TEXT NOT NULL DEFAULT 'usd'")
-	_, _ = db.Exec("INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit, stripe_price_id, price_cents, currency) VALUES ('team', 1000, 15, '', 2999, 'usd')")
+	_, _ = db.Exec(
+		"INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit, stripe_price_id, price_cents, currency) VALUES ('team', 1000, 15, '', 2999, 'usd')",
+	)
 	_, _ = db.Exec("UPDATE limits SET price_cents = 299, currency = 'usd' WHERE tier = 'pro' AND price_cents = 0")
 
 	return &Repository{db: db}, nil

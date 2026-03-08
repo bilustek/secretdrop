@@ -195,6 +195,10 @@ func (m *webhookUserRepo) FindTierByPriceID(_ context.Context, _ string) (string
 	return "", nil
 }
 
+func (m *webhookUserRepo) ListLimits(_ context.Context) ([]*user.TierLimits, error) {
+	return nil, nil
+}
+
 const (
 	testWebhookSecret   = "whsec_test_secret"
 	testEventCreatedVal = 1_234_567_890

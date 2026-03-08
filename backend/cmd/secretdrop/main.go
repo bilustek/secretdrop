@@ -178,6 +178,9 @@ func Run() error {
 	// Contact form (public — no auth required)
 	mux.HandleFunc("POST /api/v1/contact", handler.NewContactHandler(sender))
 
+	// Plans (public — no auth required)
+	mux.HandleFunc("GET /api/v1/plans", handler.NewPlansHandler(userRepo))
+
 	handler.SetOpenAPISpec(docs.OpenAPISpec)
 
 	// OAuth routes (public — no auth required)
@@ -343,6 +346,12 @@ func setupBilling(
 		billing.WithCancelURL(cfg.FrontendBaseURL() + "/billing/cancel"),
 		billing.WithPortalReturnURL(cfg.FrontendBaseURL() + "/dashboard"),
 		billing.WithNotifier(notifier),
+	}
+
+	if id := cfg.StripePortalConfigID(); id != "" {
+		billingOpts = append(billingOpts, billing.WithPortalConfigID(id))
+
+		slog.Info("stripe portal configuration enabled", "config_id", id)
 	}
 
 	if cfg.StripeProjectMetaKey() != "" && cfg.StripeProjectMetaValue() != "" {

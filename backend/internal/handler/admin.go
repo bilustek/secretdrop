@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -516,6 +518,52 @@ func parseSubscriptionListOptions(r *http.Request) []user.ListOption {
 	opts = append(opts, user.WithPage(page, perPage))
 
 	return opts
+}
+
+// NewPlansHandler returns an http.HandlerFunc that lists all available plans
+// with their pricing. This is a public endpoint (no auth required).
+func NewPlansHandler(repo interface {
+	ListLimits(ctx context.Context) ([]*user.TierLimits, error)
+},
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limits, err := repo.ListLimits(r.Context())
+		if err != nil {
+			slog.Error("list plans", "error", err)
+			writeError(w, errTypeInternal, "Failed to fetch plans", http.StatusInternalServerError)
+
+			return
+		}
+
+		plans := make([]model.PlanResponse, 0, len(limits))
+		for _, tl := range limits {
+			plans = append(plans, model.PlanResponse{
+				Tier:            tl.Tier,
+				SecretsLimit:    tl.SecretsLimit,
+				RecipientsLimit: tl.RecipientsLimit,
+				MaxTextLength:   maxTextLengthForTier(tl.Tier),
+				PriceCents:      tl.PriceCents,
+				Currency:        tl.Currency,
+			})
+		}
+
+		slices.SortFunc(plans, func(a, b model.PlanResponse) int {
+			return a.PriceCents - b.PriceCents
+		})
+
+		writeJSON(w, http.StatusOK, plans)
+	}
+}
+
+func maxTextLengthForTier(tier string) int {
+	switch tier {
+	case model.TierTeam:
+		return model.TeamMaxTextLength
+	case model.TierPro:
+		return model.ProMaxTextLength
+	default:
+		return model.FreeMaxTextLength
+	}
 }
 
 func parsePagination(r *http.Request) (page, perPage int) {

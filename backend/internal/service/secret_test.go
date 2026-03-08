@@ -83,6 +83,10 @@ func (m *mockUserRepo) FindTierByPriceID(_ context.Context, _ string) (string, e
 	return "", nil
 }
 
+func (m *mockUserRepo) ListLimits(_ context.Context) ([]*user.TierLimits, error) {
+	return nil, nil
+}
+
 func (m *mockUserRepo) IncrementSecretsUsed(_ context.Context, _ int64) error {
 	m.incrementCalled = true
 
