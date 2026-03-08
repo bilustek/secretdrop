@@ -491,6 +491,25 @@ func (r *Repository) UpdateSubscriptionPeriod(ctx context.Context, stripeSubID s
 	return nil
 }
 
+// FindTierByPriceID looks up the tier name associated with a Stripe price ID.
+// Returns model.ErrNotFound if no tier has the given price ID.
+func (r *Repository) FindTierByPriceID(ctx context.Context, priceID string) (string, error) {
+	var tier string
+
+	err := r.db.QueryRowContext(ctx,
+		"SELECT tier FROM limits WHERE stripe_price_id = ?", priceID,
+	).Scan(&tier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", model.ErrNotFound
+		}
+
+		return "", fmt.Errorf("find tier by price ID: %w", err)
+	}
+
+	return tier, nil
+}
+
 // Allowed sort columns for users (whitelist to prevent SQL injection).
 var userSortColumns = map[string]string{
 	"created_at":   "created_at",

@@ -25,6 +25,7 @@ type Repository interface {
 	UpdateSubscriptionPeriod(ctx context.Context, stripeSubID string, start, end time.Time) error
 
 	GetLimits(ctx context.Context, tier string) (*TierLimits, error)
+	FindTierByPriceID(ctx context.Context, priceID string) (string, error)
 }
 
 // AdminRepository extends Repository with admin query operations.
