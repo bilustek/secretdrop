@@ -59,10 +59,16 @@ type AdminLimitsResponse struct {
 	Tier            string `json:"tier"`
 	SecretsLimit    int    `json:"secrets_limit"`
 	RecipientsLimit int    `json:"recipients_limit"`
+	StripePriceID   string `json:"stripe_price_id"`
+	PriceCents      int    `json:"price_cents"`
+	Currency        string `json:"currency"`
 }
 
 // AdminUpsertLimitsRequest is the body for PUT /api/v1/admin/limits/{tier}.
 type AdminUpsertLimitsRequest struct {
-	SecretsLimit    int `json:"secrets_limit"`
-	RecipientsLimit int `json:"recipients_limit"`
+	SecretsLimit    int    `json:"secrets_limit"`
+	RecipientsLimit int    `json:"recipients_limit"`
+	StripePriceID   string `json:"stripe_price_id"`
+	PriceCents      int    `json:"price_cents"`
+	Currency        string `json:"currency"`
 }

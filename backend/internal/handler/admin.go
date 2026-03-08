@@ -342,6 +342,9 @@ func (h *AdminHandler) ListLimits(w http.ResponseWriter, r *http.Request) {
 			Tier:            tl.Tier,
 			SecretsLimit:    tl.SecretsLimit,
 			RecipientsLimit: tl.RecipientsLimit,
+			StripePriceID:   tl.StripePriceID,
+			PriceCents:      tl.PriceCents,
+			Currency:        tl.Currency,
 		})
 	}
 
@@ -375,6 +378,9 @@ func (h *AdminHandler) UpsertLimits(w http.ResponseWriter, r *http.Request) {
 		Tier:            tier,
 		SecretsLimit:    req.SecretsLimit,
 		RecipientsLimit: req.RecipientsLimit,
+		StripePriceID:   req.StripePriceID,
+		PriceCents:      req.PriceCents,
+		Currency:        req.Currency,
 	}
 
 	if upsertErr := h.repo.UpsertLimits(r.Context(), tl); upsertErr != nil {
@@ -388,6 +394,9 @@ func (h *AdminHandler) UpsertLimits(w http.ResponseWriter, r *http.Request) {
 		Tier:            tl.Tier,
 		SecretsLimit:    tl.SecretsLimit,
 		RecipientsLimit: tl.RecipientsLimit,
+		StripePriceID:   tl.StripePriceID,
+		PriceCents:      tl.PriceCents,
+		Currency:        tl.Currency,
 	})
 }
 
