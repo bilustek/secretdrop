@@ -68,6 +68,8 @@ func (m *mockStripeClient) CancelSubscription(_ context.Context, id string) erro
 type mockUserRepo struct {
 	subscription    *model.Subscription
 	subscriptionErr error
+	tierLimits      *user.TierLimits
+	tierLimitsErr   error
 }
 
 func (m *mockUserRepo) Upsert(_ context.Context, _ *model.User) (*model.User, error) {
@@ -123,6 +125,14 @@ func (m *mockUserRepo) DeleteUser(_ context.Context, _ int64) error {
 }
 
 func (m *mockUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits, error) {
+	if m.tierLimitsErr != nil {
+		return nil, m.tierLimitsErr
+	}
+
+	if m.tierLimits != nil {
+		return m.tierLimits, nil
+	}
+
 	return nil, model.ErrNotFound
 }
 
@@ -325,13 +335,19 @@ func TestHandleCheckout_Success(t *testing.T) {
 	sc := &mockStripeClient{
 		checkoutSession: &stripe.CheckoutSession{URL: "https://checkout.stripe.com/session123"},
 	}
-	repo := &mockUserRepo{}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "pro",
+			StripePriceID: "price_from_db",
+		},
+	}
 	svc := newTestService(t, sc, repo)
 
 	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
 	ctx := middleware.ContextWithUser(context.Background(), claims)
 
-	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", nil).WithContext(ctx)
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	svc.HandleCheckout().ServeHTTP(rec, req)
@@ -348,6 +364,10 @@ func TestHandleCheckout_Success(t *testing.T) {
 	if resp["url"] != "https://checkout.stripe.com/session123" {
 		t.Errorf("url = %q; want %q", resp["url"], "https://checkout.stripe.com/session123")
 	}
+
+	if sc.checkoutParams.LineItems[0].Price == nil || *sc.checkoutParams.LineItems[0].Price != "price_from_db" {
+		t.Errorf("price = %v; want %q", sc.checkoutParams.LineItems[0].Price, "price_from_db")
+	}
 }
 
 func TestHandleCheckout_StripeError(t *testing.T) {
@@ -356,13 +376,19 @@ func TestHandleCheckout_StripeError(t *testing.T) {
 	sc := &mockStripeClient{
 		checkoutErr: errors.New("stripe API error"),
 	}
-	repo := &mockUserRepo{}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "pro",
+			StripePriceID: "price_from_db",
+		},
+	}
 	svc := newTestService(t, sc, repo)
 
 	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
 	ctx := middleware.ContextWithUser(context.Background(), claims)
 
-	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", nil).WithContext(ctx)
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	svc.HandleCheckout().ServeHTTP(rec, req)
@@ -636,7 +662,12 @@ func TestHandleCheckout_WithProjectMetadata(t *testing.T) {
 	sc := &mockStripeClient{
 		checkoutSession: &stripe.CheckoutSession{URL: "https://checkout.stripe.com/session123"},
 	}
-	repo := &mockUserRepo{}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "pro",
+			StripePriceID: "price_from_db",
+		},
+	}
 
 	svc, err := New(
 		"sk_test_key",
@@ -655,7 +686,8 @@ func TestHandleCheckout_WithProjectMetadata(t *testing.T) {
 	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
 	ctx := middleware.ContextWithUser(context.Background(), claims)
 
-	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", nil).WithContext(ctx)
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	svc.HandleCheckout().ServeHTTP(rec, req)

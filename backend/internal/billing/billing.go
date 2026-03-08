@@ -217,11 +217,47 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 			return
 		}
 
+		var req model.CheckoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, "invalid_request", "Invalid request body", http.StatusBadRequest)
+
+			return
+		}
+
+		if req.Tier == "" || req.Tier == model.TierFree {
+			writeError(w, "invalid_request", "Invalid tier", http.StatusBadRequest)
+
+			return
+		}
+
+		tierLimits, err := s.userRepo.GetLimits(r.Context(), req.Tier)
+		if err != nil {
+			if errors.Is(err, model.ErrNotFound) {
+				writeError(w, "not_found", "Plan not found", http.StatusNotFound)
+			} else {
+				slog.Error("get tier limits", slogKeyError, err)
+				writeError(w, "internal_error", "Failed to look up plan", http.StatusInternalServerError)
+			}
+
+			return
+		}
+
+		priceID := tierLimits.StripePriceID
+		if priceID == "" {
+			priceID = s.priceID
+		}
+
+		if priceID == "" {
+			writeError(w, "configuration_error", "Plan not configured for billing", http.StatusUnprocessableEntity)
+
+			return
+		}
+
 		params := &stripe.CheckoutSessionCreateParams{
 			Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 			LineItems: []*stripe.CheckoutSessionCreateLineItemParams{
 				{
-					Price:    stripe.String(s.priceID),
+					Price:    stripe.String(priceID),
 					Quantity: stripe.Int64(1),
 				},
 			},

@@ -44,6 +44,11 @@ type PlanResponse struct {
 	Currency        string `json:"currency"`
 }
 
+// CheckoutRequest is the body for POST /billing/checkout.
+type CheckoutRequest struct {
+	Tier string `json:"tier"`
+}
+
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
