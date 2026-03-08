@@ -440,6 +440,10 @@ func (m *mockUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits,
 	return nil, model.ErrNotFound
 }
 
+func (m *mockUserRepo) FindTierByPriceID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 // errorResponse is a helper type for decoding error JSON responses.
 type errorResponse struct {
 	Error struct {

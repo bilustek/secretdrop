@@ -1213,6 +1213,10 @@ func (m *mockAdminRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits
 	return nil, model.ErrNotFound
 }
 
+func (m *mockAdminRepo) FindTierByPriceID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 // --- ListUsers error paths ---
 
 func TestAdminListUsers_ListError(t *testing.T) {

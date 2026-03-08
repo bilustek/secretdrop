@@ -126,6 +126,10 @@ func (m *mockUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits,
 	return nil, model.ErrNotFound
 }
 
+func (m *mockUserRepo) FindTierByPriceID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 type errorEnvelope struct {
 	Error struct {
 		Type    string `json:"type"`
