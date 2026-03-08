@@ -154,6 +154,9 @@ export default function AdminLimits() {
                 <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Tier</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Secrets Limit</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Recipients Limit</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Stripe Price ID</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Price (cents)</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Currency</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Actions</th>
               </tr>
             </thead>
@@ -180,6 +183,32 @@ export default function AdminLimits() {
                         className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                       />
                     </td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        placeholder="price_..."
+                        value={editRow.stripe_price_id}
+                        onChange={(e) => setEditRow({ ...editRow, stripe_price_id: e.target.value })}
+                        className="w-36 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm font-mono text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        min="0"
+                        value={editRow.price_cents}
+                        onChange={(e) => setEditRow({ ...editRow, price_cents: e.target.value })}
+                        className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={editRow.currency}
+                        onChange={(e) => setEditRow({ ...editRow, currency: e.target.value })}
+                        className="w-16 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm uppercase text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                      />
+                    </td>
                     <td className="px-4 py-3 flex gap-2">
                       <button type="button" onClick={handleSave} className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="Save">
                         <Save size={16} />
@@ -194,6 +223,9 @@ export default function AdminLimits() {
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 capitalize">{tl.tier}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{tl.secrets_limit}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{tl.recipients_limit}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-mono text-xs">{tl.stripe_price_id || "—"}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{tl.price_cents}</td>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100 uppercase">{tl.currency}</td>
                     <td className="px-4 py-3 flex gap-2">
                       <button
                         type="button"
@@ -246,6 +278,32 @@ export default function AdminLimits() {
                       value={editRow.recipients_limit}
                       onChange={(e) => setEditRow({ ...editRow, recipients_limit: e.target.value })}
                       className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      placeholder="price_..."
+                      value={editRow.stripe_price_id}
+                      onChange={(e) => setEditRow({ ...editRow, stripe_price_id: e.target.value })}
+                      className="w-36 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm font-mono text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      value={editRow.price_cents}
+                      onChange={(e) => setEditRow({ ...editRow, price_cents: e.target.value })}
+                      className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={editRow.currency}
+                      onChange={(e) => setEditRow({ ...editRow, currency: e.target.value })}
+                      className="w-16 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-sm uppercase text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                     />
                   </td>
                   <td className="px-4 py-3 flex gap-2">

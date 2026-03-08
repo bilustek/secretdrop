@@ -269,12 +269,15 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 			),
 		}
 
+		meta := map[string]string{"tier": req.Tier}
+
 		if s.projectMetaKey != "" && s.projectMetaVal != "" {
-			meta := map[string]string{s.projectMetaKey: s.projectMetaVal}
-			params.Metadata = meta
-			params.SubscriptionData = &stripe.CheckoutSessionCreateSubscriptionDataParams{
-				Metadata: meta,
-			}
+			meta[s.projectMetaKey] = s.projectMetaVal
+		}
+
+		params.Metadata = meta
+		params.SubscriptionData = &stripe.CheckoutSessionCreateSubscriptionDataParams{
+			Metadata: meta,
 		}
 
 		sess, err := s.stripeClient.CreateCheckoutSession(r.Context(), params)
