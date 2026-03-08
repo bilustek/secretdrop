@@ -25,6 +25,11 @@ func TestUserSecretsLimit(t *testing.T) {
 			want: model.ProTierLimit,
 		},
 		{
+			name: "team tier returns 1000",
+			tier: model.TierTeam,
+			want: model.TeamTierLimit,
+		},
+		{
 			name: "unknown tier defaults to free limit",
 			tier: "unknown",
 			want: model.FreeTierLimit,
@@ -171,6 +176,13 @@ func TestUserSecretsLimit_PriorityChain(t *testing.T) {
 			secretsLimitOvrd: nil,
 			want:             model.FreeTierLimit,
 		},
+		{
+			name:             "team fallback when no override or tier limit",
+			tier:             model.TierTeam,
+			tierSecretsLimit: 0,
+			secretsLimitOvrd: nil,
+			want:             model.TeamTierLimit,
+		},
 	}
 
 	for _, tt := range tests {
@@ -185,6 +197,49 @@ func TestUserSecretsLimit_PriorityChain(t *testing.T) {
 
 			if got := u.SecretsLimit(); got != tt.want {
 				t.Errorf("SecretsLimit() = %d; want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUserMaxTextLength(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tier string
+		want int
+	}{
+		{
+			name: "free tier returns 4096",
+			tier: model.TierFree,
+			want: model.FreeMaxTextLength,
+		},
+		{
+			name: "pro tier returns 65536",
+			tier: model.TierPro,
+			want: model.ProMaxTextLength,
+		},
+		{
+			name: "team tier returns 262144",
+			tier: model.TierTeam,
+			want: model.TeamMaxTextLength,
+		},
+		{
+			name: "unknown tier defaults to free",
+			tier: "unknown",
+			want: model.FreeMaxTextLength,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			u := &model.User{Tier: tt.tier}
+
+			if got := u.MaxTextLength(); got != tt.want {
+				t.Errorf("MaxTextLength() = %d; want %d", got, tt.want)
 			}
 		})
 	}
@@ -210,6 +265,12 @@ func TestUserRecipientsLimit(t *testing.T) {
 			tier:                model.TierPro,
 			tierRecipientsLimit: 0,
 			want:                model.ProMaxRecipients,
+		},
+		{
+			name:                "team fallback when no tier recipients limit",
+			tier:                model.TierTeam,
+			tierRecipientsLimit: 0,
+			want:                model.TeamMaxRecipients,
 		},
 		{
 			name:                "free fallback when no tier recipients limit",
@@ -306,6 +367,18 @@ func TestUserCanCreateSecret(t *testing.T) {
 			name:        "pro tier at limit",
 			tier:        model.TierPro,
 			secretsUsed: model.ProTierLimit,
+			want:        false,
+		},
+		{
+			name:        "team tier under limit",
+			tier:        model.TierTeam,
+			secretsUsed: 500,
+			want:        true,
+		},
+		{
+			name:        "team tier at limit",
+			tier:        model.TierTeam,
+			secretsUsed: model.TeamTierLimit,
 			want:        false,
 		},
 	}

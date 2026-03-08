@@ -7,11 +7,15 @@ const (
 	TierFree = "free"
 	// TierPro is the paid tier with higher limits.
 	TierPro = "pro"
+	// TierTeam is the premium tier with highest limits.
+	TierTeam = "team"
 
 	// FreeTierLimit is the hardcoded fallback for free tier secrets limit.
 	FreeTierLimit = 5
 	// ProTierLimit is the hardcoded fallback for pro tier secrets limit.
 	ProTierLimit = 100
+	// TeamTierLimit is the hardcoded fallback for team tier secrets limit.
+	TeamTierLimit = 1000
 )
 
 // User represents an authenticated user in the system.
@@ -56,11 +60,14 @@ func (u *User) SecretsLimit() int {
 		return u.TierSecretsLimit
 	}
 
-	if u.Tier == TierPro {
+	switch u.Tier {
+	case TierTeam:
+		return TeamTierLimit
+	case TierPro:
 		return ProTierLimit
+	default:
+		return FreeTierLimit
 	}
-
-	return FreeTierLimit
 }
 
 // CanCreateSecret reports whether the user has not yet reached their
@@ -71,11 +78,14 @@ func (u *User) CanCreateSecret() bool {
 
 // MaxTextLength returns the maximum secret text length for this user's tier.
 func (u *User) MaxTextLength() int {
-	if u.Tier == TierPro {
+	switch u.Tier {
+	case TierTeam:
+		return TeamMaxTextLength
+	case TierPro:
 		return ProMaxTextLength
+	default:
+		return FreeMaxTextLength
 	}
-
-	return FreeMaxTextLength
 }
 
 // RecipientsLimit returns the maximum number of recipients per secret.
@@ -89,9 +99,12 @@ func (u *User) RecipientsLimit() int {
 		return u.TierRecipientsLimit
 	}
 
-	if u.Tier == TierPro {
+	switch u.Tier {
+	case TierTeam:
+		return TeamMaxRecipients
+	case TierPro:
 		return ProMaxRecipients
+	default:
+		return FreeMaxRecipients
 	}
-
-	return FreeMaxRecipients
 }
