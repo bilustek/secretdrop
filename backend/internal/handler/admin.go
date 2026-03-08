@@ -456,11 +456,14 @@ func computeEffectiveLimit(u *model.User, limitsMap map[string]*user.TierLimits)
 		return tl.SecretsLimit
 	}
 
-	if u.Tier == model.TierPro {
+	switch u.Tier {
+	case model.TierTeam:
+		return model.TeamTierLimit
+	case model.TierPro:
 		return model.ProTierLimit
+	default:
+		return model.FreeTierLimit
 	}
-
-	return model.FreeTierLimit
 }
 
 // computeEffectiveRecipientsLimit returns the effective recipients limit for a user.
@@ -474,11 +477,14 @@ func computeEffectiveRecipientsLimit(u *model.User, limitsMap map[string]*user.T
 		return tl.RecipientsLimit
 	}
 
-	if u.Tier == model.TierPro {
+	switch u.Tier {
+	case model.TierTeam:
+		return model.TeamMaxRecipients
+	case model.TierPro:
 		return model.ProMaxRecipients
+	default:
+		return model.FreeMaxRecipients
 	}
-
-	return model.FreeMaxRecipients
 }
 
 func parseUserListOptions(r *http.Request) []user.ListOption {
