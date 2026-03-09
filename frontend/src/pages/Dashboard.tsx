@@ -54,6 +54,7 @@ export default function Dashboard() {
   const { addEmails, suggest } = useRecentEmails()
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestions = showSuggestions ? suggest(emailInput, emails) : []
@@ -93,7 +94,7 @@ export default function Dashboard() {
     if (!tier) return
     localStorage.removeItem("pending_checkout_tier")
     api.checkout(tier).then(({ url }) => {
-      window.location.href = url
+      location.assign(url)
     }).catch(() => {})
   }, [auth?.user])
 
@@ -153,9 +154,6 @@ export default function Dashboard() {
       setIsSubmitting(false)
     }
   }
-
-  const [upgradeOpen, setUpgradeOpen] = useState(false)
-
 
   if (result) {
     return (

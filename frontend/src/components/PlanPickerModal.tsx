@@ -36,7 +36,7 @@ export function PlanPickerModal({ onClose }: Props) {
     setLoading(tier)
     try {
       const { url } = await api.checkout(tier)
-      window.location.href = url
+      location.assign(url)
     } catch {
       setLoading(null)
     }
