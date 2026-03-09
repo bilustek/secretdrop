@@ -108,10 +108,6 @@ func New(
 		return nil, errors.New("stripe webhook secret cannot be empty")
 	}
 
-	if priceID == "" {
-		return nil, errors.New("stripe price ID cannot be empty")
-	}
-
 	sc := stripe.NewClient(secretKey)
 
 	s := &Service{

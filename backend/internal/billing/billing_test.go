@@ -216,13 +216,6 @@ func TestNew_Validation(t *testing.T) {
 			priceID:       "price_test",
 			wantErr:       "stripe webhook secret cannot be empty",
 		},
-		{
-			name:          "empty price ID",
-			secretKey:     "sk_test",
-			webhookSecret: "whsec_test",
-			priceID:       "",
-			wantErr:       "stripe price ID cannot be empty",
-		},
 	}
 
 	for _, tt := range tests {
@@ -942,12 +935,10 @@ func TestHandleCheckout_NoPriceIDAnywhere(t *testing.T) {
 		},
 	}
 
-	// Create service with empty legacy priceID — must use New directly with a
-	// dummy priceID then clear it, since New() validates priceID is non-empty.
 	svc, err := New(
 		"sk_test_key",
 		"whsec_test",
-		"price_placeholder",
+		"",
 		repo,
 		WithStripeClient(sc),
 		WithSuccessURL("https://example.com/success"),
@@ -956,9 +947,6 @@ func TestHandleCheckout_NoPriceIDAnywhere(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-
-	// Clear the legacy priceID to simulate no fallback available.
-	svc.priceID = ""
 
 	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
 	ctx := middleware.ContextWithUser(context.Background(), claims)
