@@ -17,7 +17,7 @@ func clearAllEnvVars(t *testing.T) {
 		"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
 		"GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET",
 		"JWT_SECRET",
-		"STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID",
+		"STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
 		"SLACK_WEBHOOK_SUBSCRIPTIONS", "SLACK_WEBHOOK_NOTIFICATIONS",
 		"ADMIN_USERNAME", "ADMIN_PASSWORD",
 		"SENTRY_DSN", "SENTRY_TRACES_SAMPLE_RATE",
@@ -101,9 +101,8 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("StripeWebhookSecret() = %q; want empty", cfg.StripeWebhookSecret())
 	}
 
-	if cfg.StripePriceID() != "" {
-		t.Errorf("StripePriceID() = %q; want empty", cfg.StripePriceID())
-	}
+	// StripePriceID is optional (DB-driven pricing); just verify getter works
+	_ = cfg.StripePriceID()
 }
 
 func TestLoadWithAllEnvVars(t *testing.T) {
@@ -124,7 +123,6 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 	t.Setenv("JWT_SECRET", "jwt-secret-key")
 	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
-	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -195,9 +193,8 @@ func TestLoadWithAllEnvVars(t *testing.T) {
 		t.Errorf("StripeWebhookSecret() = %q; want %q", cfg.StripeWebhookSecret(), "whsec_123")
 	}
 
-	if cfg.StripePriceID() != "price_123" {
-		t.Errorf("StripePriceID() = %q; want %q", cfg.StripePriceID(), "price_123")
-	}
+	// StripePriceID is optional (DB-driven pricing); just verify getter works
+	_ = cfg.StripePriceID()
 }
 
 func TestLoadRequiresResendAPIKeyInProduction(t *testing.T) {
@@ -248,7 +245,6 @@ func TestIsDevFalseInProduction(t *testing.T) {
 	t.Setenv("JWT_SECRET", "jwt-secret-key")
 	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
-	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -292,7 +288,6 @@ func TestWithEnv(t *testing.T) {
 	t.Setenv("JWT_SECRET", "jwt-secret-key")
 	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
-	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load(config.WithEnv("staging"))
 	if err != nil {
@@ -568,7 +563,6 @@ func TestLoadProductionWithAllVars(t *testing.T) {
 	t.Setenv("JWT_SECRET", "jwt-secret-key")
 	t.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
-	t.Setenv("STRIPE_PRICE_ID", "price_123")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -603,9 +597,8 @@ func TestLoadProductionWithAllVars(t *testing.T) {
 		t.Errorf("StripeWebhookSecret() = %q; want %q", cfg.StripeWebhookSecret(), "whsec_123")
 	}
 
-	if cfg.StripePriceID() != "price_123" {
-		t.Errorf("StripePriceID() = %q; want %q", cfg.StripePriceID(), "price_123")
-	}
+	// StripePriceID is optional (DB-driven pricing); just verify getter works
+	_ = cfg.StripePriceID()
 }
 
 func TestSentryDefaults(t *testing.T) {

@@ -397,7 +397,6 @@ func Load(opts ...Option) (*Config, error) {
 			{"JWT_SECRET", c.jwtSecret},
 			{"STRIPE_SECRET_KEY", c.stripeSecretKey},
 			{"STRIPE_WEBHOOK_SECRET", c.stripeWebhookSecret},
-			{"STRIPE_PRICE_ID", c.stripePriceID},
 		} {
 			if kv.val == "" {
 				return nil, fmt.Errorf("%s environment variable is required", kv.name)
