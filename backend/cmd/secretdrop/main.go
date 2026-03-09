@@ -335,8 +335,8 @@ func setupBilling(
 	userRepo *usersqlite.Repository,
 	notifier slackpkg.Notifier,
 ) (*billing.Service, error) {
-	if cfg.StripeSecretKey() == "" || cfg.StripeWebhookSecret() == "" || cfg.StripePriceID() == "" {
-		slog.Info("billing routes disabled (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, or STRIPE_PRICE_ID not set)")
+	if cfg.StripeSecretKey() == "" || cfg.StripeWebhookSecret() == "" {
+		slog.Info("billing routes disabled (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET not set)")
 
 		return nil, nil
 	}
