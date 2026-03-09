@@ -40,6 +40,7 @@ type mockStripeClient struct {
 	checkoutParams  *stripe.CheckoutSessionCreateParams
 	portalSession   *stripe.BillingPortalSession
 	portalErr       error
+	portalParams    *stripe.BillingPortalSessionCreateParams
 	cancelErr       error
 	cancelCalledID  string
 }
@@ -54,8 +55,9 @@ func (m *mockStripeClient) CreateCheckoutSession(
 
 func (m *mockStripeClient) CreatePortalSession(
 	_ context.Context,
-	_ *stripe.BillingPortalSessionCreateParams,
+	params *stripe.BillingPortalSessionCreateParams,
 ) (*stripe.BillingPortalSession, error) {
+	m.portalParams = params
 	return m.portalSession, m.portalErr
 }
 
@@ -710,5 +712,437 @@ func TestHandleCheckout_WithProjectMetadata(t *testing.T) {
 
 	if sc.checkoutParams.SubscriptionData == nil {
 		t.Fatal("subscription data should not be nil when project metadata is set")
+	}
+}
+
+func TestHandleCheckout_InvalidRequestBody(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{invalid json}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_request" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_request")
+	}
+
+	if resp.Error.Message != "Invalid request body" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Invalid request body")
+	}
+}
+
+func TestHandleCheckout_EmptyTier(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":""}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_request" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_request")
+	}
+
+	if resp.Error.Message != "Invalid tier" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Invalid tier")
+	}
+}
+
+func TestHandleCheckout_FreeTier(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"free"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "invalid_request" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "invalid_request")
+	}
+
+	if resp.Error.Message != "Invalid tier" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Invalid tier")
+	}
+}
+
+func TestHandleCheckout_TierNotFound(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{
+		tierLimitsErr: model.ErrNotFound,
+	}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"enterprise"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusNotFound)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "not_found" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "not_found")
+	}
+
+	if resp.Error.Message != "Plan not found" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Plan not found")
+	}
+}
+
+func TestHandleCheckout_GetLimitsDBError(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{
+		tierLimitsErr: errors.New("database connection failed"),
+	}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "internal_error" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "internal_error")
+	}
+
+	if resp.Error.Message != "Failed to look up plan" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Failed to look up plan")
+	}
+}
+
+func TestHandleCheckout_FallbackToLegacyPriceID(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		checkoutSession: &stripe.CheckoutSession{URL: "https://checkout.stripe.com/legacy"},
+	}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "pro",
+			StripePriceID: "", // no price ID in DB
+		},
+	}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp["url"] != "https://checkout.stripe.com/legacy" {
+		t.Errorf("url = %q; want %q", resp["url"], "https://checkout.stripe.com/legacy")
+	}
+
+	// Should fall back to the legacy priceID ("price_test") from newTestService.
+	if sc.checkoutParams.LineItems[0].Price == nil || *sc.checkoutParams.LineItems[0].Price != "price_test" {
+		t.Errorf("price = %v; want %q", sc.checkoutParams.LineItems[0].Price, "price_test")
+	}
+}
+
+func TestHandleCheckout_NoPriceIDAnywhere(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "pro",
+			StripePriceID: "", // no price ID in DB
+		},
+	}
+
+	// Create service with empty legacy priceID — must use New directly with a
+	// dummy priceID then clear it, since New() validates priceID is non-empty.
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_placeholder",
+		repo,
+		WithStripeClient(sc),
+		WithSuccessURL("https://example.com/success"),
+		WithCancelURL("https://example.com/cancel"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	// Clear the legacy priceID to simulate no fallback available.
+	svc.priceID = ""
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"pro"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Error.Type != "configuration_error" {
+		t.Errorf("error type = %q; want %q", resp.Error.Type, "configuration_error")
+	}
+
+	if resp.Error.Message != "Plan not configured for billing" {
+		t.Errorf("error message = %q; want %q", resp.Error.Message, "Plan not configured for billing")
+	}
+}
+
+func TestHandleCheckout_TierMetadataIncluded(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		checkoutSession: &stripe.CheckoutSession{URL: "https://checkout.stripe.com/session"},
+	}
+	repo := &mockUserRepo{
+		tierLimits: &user.TierLimits{
+			Tier:          "team",
+			StripePriceID: "price_team",
+		},
+	}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 99, Email: "team@example.com", Tier: "free"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	body := strings.NewReader(`{"tier":"team"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/checkout", body).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandleCheckout().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if sc.checkoutParams.Metadata == nil {
+		t.Fatal("metadata should not be nil")
+	}
+
+	if sc.checkoutParams.Metadata["tier"] != "team" {
+		t.Errorf("metadata[tier] = %q; want %q", sc.checkoutParams.Metadata["tier"], "team")
+	}
+
+	if sc.checkoutParams.SubscriptionData == nil {
+		t.Fatal("subscription data should not be nil")
+	}
+
+	if sc.checkoutParams.SubscriptionData.Metadata["tier"] != "team" {
+		t.Errorf("subscription metadata[tier] = %q; want %q", sc.checkoutParams.SubscriptionData.Metadata["tier"], "team")
+	}
+}
+
+func TestWithPortalConfigID(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockUserRepo{}
+
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_test",
+		repo,
+		WithPortalConfigID("bpc_test_config"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if svc.portalConfigID != "bpc_test_config" {
+		t.Errorf("portalConfigID = %q; want %q", svc.portalConfigID, "bpc_test_config")
+	}
+}
+
+func TestHandlePortal_WithPortalConfigID(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		portalSession: &stripe.BillingPortalSession{URL: "https://billing.stripe.com/portal_config"},
+	}
+	repo := &mockUserRepo{
+		subscription: &model.Subscription{
+			StripeCustomerID: "cus_test456",
+		},
+	}
+
+	svc, err := New(
+		"sk_test_key",
+		"whsec_test",
+		"price_test",
+		repo,
+		WithStripeClient(sc),
+		WithSuccessURL("https://example.com/success"),
+		WithCancelURL("https://example.com/cancel"),
+		WithPortalReturnURL("https://example.com/dashboard"),
+		WithPortalConfigID("bpc_test_config"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "pro"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	req := httptest.NewRequest(http.MethodPost, "/billing/portal", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandlePortal().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp["url"] != "https://billing.stripe.com/portal_config" {
+		t.Errorf("url = %q; want %q", resp["url"], "https://billing.stripe.com/portal_config")
+	}
+
+	if sc.portalParams == nil {
+		t.Fatal("portal params should not be nil")
+	}
+
+	if sc.portalParams.Configuration == nil || *sc.portalParams.Configuration != "bpc_test_config" {
+		t.Errorf("portal configuration = %v; want %q", sc.portalParams.Configuration, "bpc_test_config")
+	}
+
+	if sc.portalParams.ReturnURL == nil || *sc.portalParams.ReturnURL != "https://example.com/dashboard" {
+		t.Errorf("portal return URL = %v; want %q", sc.portalParams.ReturnURL, "https://example.com/dashboard")
+	}
+}
+
+func TestHandlePortal_WithoutPortalConfigID(t *testing.T) {
+	t.Parallel()
+
+	sc := &mockStripeClient{
+		portalSession: &stripe.BillingPortalSession{URL: "https://billing.stripe.com/portal_no_config"},
+	}
+	repo := &mockUserRepo{
+		subscription: &model.Subscription{
+			StripeCustomerID: "cus_test789",
+		},
+	}
+	svc := newTestService(t, sc, repo)
+
+	claims := &auth.Claims{UserID: 42, Email: "user@example.com", Tier: "pro"}
+	ctx := middleware.ContextWithUser(context.Background(), claims)
+
+	req := httptest.NewRequest(http.MethodPost, "/billing/portal", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	svc.HandlePortal().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if sc.portalParams == nil {
+		t.Fatal("portal params should not be nil")
+	}
+
+	if sc.portalParams.Configuration != nil {
+		t.Errorf("portal configuration = %v; want nil (no config ID set)", sc.portalParams.Configuration)
 	}
 }
