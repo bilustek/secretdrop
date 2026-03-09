@@ -17,7 +17,10 @@ import (
 	"github.com/bilustek/secretdrop/internal/user"
 )
 
-const slogKeyError = "error"
+const (
+	slogKeyError    = "error"
+	errTypeInternal = "internal_error"
+)
 
 // StripeClient defines the Stripe operations needed by the billing service.
 type StripeClient interface {
@@ -236,7 +239,7 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 				writeError(w, "not_found", "Plan not found", http.StatusNotFound)
 			} else {
 				slog.Error("get tier limits", slogKeyError, err)
-				writeError(w, "internal_error", "Failed to look up plan", http.StatusInternalServerError)
+				writeError(w, errTypeInternal, "Failed to look up plan", http.StatusInternalServerError)
 			}
 
 			return
@@ -284,7 +287,7 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 		if err != nil {
 			slog.Error("create checkout session", slogKeyError, err)
 			writeError(
-				w, "internal_error",
+				w, errTypeInternal,
 				"Failed to create checkout session",
 				http.StatusInternalServerError,
 			)
@@ -314,7 +317,7 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 			} else {
 				slog.Error("find subscription", slogKeyError, err)
 				writeError(
-					w, "internal_error",
+					w, errTypeInternal,
 					"Failed to find subscription",
 					http.StatusInternalServerError,
 				)
@@ -336,7 +339,7 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 		if err != nil {
 			slog.Error("create portal session", slogKeyError, err)
 			writeError(
-				w, "internal_error",
+				w, errTypeInternal,
 				"Failed to create portal session",
 				http.StatusInternalServerError,
 			)

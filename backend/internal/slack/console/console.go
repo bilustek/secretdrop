@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 
 	"github.com/bilustek/secretdrop/internal/slack"
 )
@@ -51,7 +51,7 @@ func (n *Notifier) Notify(_ context.Context, event slack.Event) error {
 		keys = append(keys, k)
 	}
 
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	for _, k := range keys {
 		line += fmt.Sprintf(" %s=%s", k, event.Fields[k])

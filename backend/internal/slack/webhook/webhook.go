@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/bilustek/secretdrop/internal/slack"
@@ -165,7 +165,7 @@ func buildErrorBlock(event slack.Event) block {
 		keys = append(keys, k)
 	}
 
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	var content string
 	for _, k := range keys {
@@ -192,7 +192,7 @@ func buildFieldsBlock(event slack.Event) block {
 		keys = append(keys, k)
 	}
 
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	fields := make([]textObj, 0, len(keys)+1)
 

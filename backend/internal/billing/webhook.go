@@ -135,7 +135,7 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, event stripe.Even
 	}
 
 	if s.notifier != nil {
-		go func() {
+		go func() { //nolint:gosec // G118: fire-and-forget notification must outlive request
 			ev := slack.Event{
 				Type:    slack.EventSubscriptionCreated,
 				Message: "New subscription",
@@ -236,7 +236,7 @@ func (s *Service) handleSubscriptionDeleted(ctx context.Context, event stripe.Ev
 	}
 
 	if s.notifier != nil {
-		go func() {
+		go func() { //nolint:gosec // G118: fire-and-forget notification must outlive request
 			ev := slack.Event{
 				Type:    slack.EventSubscriptionCancelled,
 				Message: "Subscription cancelled",
