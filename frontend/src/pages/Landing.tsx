@@ -376,7 +376,12 @@ export default function Landing() {
                 </ul>
                 <button
                   type="button"
-                  onClick={() => setSignInOpen(true)}
+                  onClick={() => {
+                    if (plan.price_cents > 0) {
+                      localStorage.setItem("pending_checkout_tier", plan.tier)
+                    }
+                    setSignInOpen(true)
+                  }}
                   className={`mt-6 block w-full text-center px-4 py-2 rounded-lg font-medium transition-all ${
                     plan.price_cents === 0
                       ? "border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900"

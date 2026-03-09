@@ -49,9 +49,8 @@ CREATE TABLE IF NOT EXISTS limits (
     price_cents      INTEGER NOT NULL DEFAULT 0,
     currency         TEXT NOT NULL DEFAULT 'usd'
 );
-INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit, price_cents, currency) VALUES ('free', 5, 1, 0, 'usd');
-INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit, price_cents, currency) VALUES ('pro', 100, 5, 299, 'usd');
-INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit, price_cents, currency) VALUES ('team', 1000, 15, 2999, 'usd');
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('free', 5, 1);
+INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('pro', 100, 5);
 `
 
 const (

@@ -2,6 +2,7 @@ import { use, useState, useRef, useEffect, type FormEvent } from "react"
 import { Plus, X, Loader2, Copy, Check, Rocket, Clock } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { api, AppError, type CreateSecretResponse } from "../api/client"
+import { PlanPickerModal } from "../components/PlanPickerModal"
 import { useRecentEmails } from "../hooks/useRecentEmails"
 import { SuccessModal } from "../components/SuccessModal"
 
@@ -86,6 +87,16 @@ export default function Dashboard() {
     }
   }, [auth?.user])
 
+  useEffect(() => {
+    if (!auth?.user || auth.user.tier !== "free") return
+    const tier = localStorage.getItem("pending_checkout_tier")
+    if (!tier) return
+    localStorage.removeItem("pending_checkout_tier")
+    api.checkout(tier).then(({ url }) => {
+      window.location.href = url
+    }).catch(() => {})
+  }, [auth?.user])
+
   if (!auth || !auth.user) return null
 
   const { user, refreshUser } = auth
@@ -131,7 +142,7 @@ export default function Dashboard() {
     } catch (err) {
       if (err instanceof AppError) {
         if (err.type === "limit_reached") {
-          setError("You've reached your secret limit. Upgrade to Pro for more.")
+          setError("You've reached your secret limit. Upgrade for more.")
         } else {
           setError(err.message)
         }
@@ -143,14 +154,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleUpgrade = async () => {
-    try {
-      const { url } = await api.checkout("pro")
-      window.location.href = url
-    } catch {
-      setError("Failed to start checkout. Please try again.")
-    }
-  }
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
 
   if (result) {
@@ -190,11 +194,11 @@ export default function Dashboard() {
           ) : user.tier === "free" ? (
             <button
               type="button"
-              onClick={handleUpgrade}
+              onClick={() => setUpgradeOpen(true)}
               className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
             >
               <Rocket size={16} />
-              Upgrade to Pro for More Secrets
+              Upgrade for More Secrets
             </button>
           ) : (
             <button
@@ -218,15 +222,15 @@ export default function Dashboard() {
         <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
           <h2 className="font-semibold text-lg mb-2">You've used your free secret</h2>
           <p className="text-sm text-gray-500 mb-6">
-            Upgrade to Pro for up to {100} secrets per month.
+            Upgrade your plan for more secrets per month.
           </p>
           <button
             type="button"
-            onClick={handleUpgrade}
+            onClick={() => setUpgradeOpen(true)}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
           >
             <Rocket size={18} />
-            Upgrade to Pro
+            Upgrade
           </button>
         </div>
       </div>
@@ -367,7 +371,7 @@ export default function Dashboard() {
 
       <div className="mt-8 flex items-center justify-between text-sm text-gray-500">
         <p>
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mr-2 uppercase ${user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mr-2 uppercase ${user.tier !== "free" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
             {user.tier}
           </span>
           {user.secrets_used} / {user.secrets_limit} secrets used
@@ -375,14 +379,18 @@ export default function Dashboard() {
         {user.tier === "free" && (
           <button
             type="button"
-            onClick={handleUpgrade}
+            onClick={() => setUpgradeOpen(true)}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
           >
             <Rocket size={14} />
-            Upgrade to Pro
+            Upgrade
           </button>
         )}
       </div>
+
+      {upgradeOpen && (
+        <PlanPickerModal onClose={() => setUpgradeOpen(false)} />
+      )}
     </div>
   )
 }
