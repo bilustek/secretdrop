@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard"
 import Reveal from "./pages/Reveal"
 import AuthCallback from "./pages/AuthCallback"
 import BillingSuccess from "./pages/BillingSuccess"
+import BillingCancel from "./pages/BillingCancel"
 import Terms from "./pages/Terms"
 import Privacy from "./pages/Privacy"
 import Contact from "./pages/Contact"
@@ -27,6 +28,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="billing/success" element={<BillingSuccess />} />
+          <Route path="billing/cancel" element={<BillingCancel />} />
         </Route>
       </Route>
       <Route path="auth/callback" element={<AuthCallback />} />
