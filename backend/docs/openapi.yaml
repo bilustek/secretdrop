@@ -583,6 +583,14 @@ paths:
         authenticated.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+            example:
+              tier: "pro"
       responses:
         "200":
           description: Checkout session URL
@@ -858,9 +866,15 @@ paths:
                 - tier: "free"
                   secrets_limit: 5
                   recipients_limit: 1
+                  stripe_price_id: ""
+                  price_cents: 0
+                  currency: "usd"
                 - tier: "pro"
                   secrets_limit: 100
                   recipients_limit: 10
+                  stripe_price_id: "price_1abc123"
+                  price_cents: 299
+                  currency: "usd"
         "401":
           description: Admin authentication required
 
@@ -889,6 +903,9 @@ paths:
             example:
               secrets_limit: 1000
               recipients_limit: 20
+              stripe_price_id: "price_1abc123"
+              price_cents: 999
+              currency: "usd"
       responses:
         "200":
           description: Tier limits created or updated
@@ -925,6 +942,36 @@ paths:
           description: Admin authentication required
         "404":
           description: Tier not found
+
+  /api/v1/plans:
+    get:
+      operationId: listPlans
+      summary: List available plans
+      description: |
+        Returns all available plans with pricing, sorted by price ascending.
+        No authentication required.
+      responses:
+        "200":
+          description: Array of available plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlanResponse"
+              example:
+                - tier: "free"
+                  secrets_limit: 5
+                  recipients_limit: 1
+                  max_text_length: 4096
+                  price_cents: 0
+                  currency: "usd"
+                - tier: "pro"
+                  secrets_limit: 100
+                  recipients_limit: 10
+                  max_text_length: 65536
+                  price_cents: 299
+                  currency: "usd"
 
   /healthz:
     get:
@@ -1267,6 +1314,15 @@ components:
           type: integer
         recipients_limit:
           type: integer
+        stripe_price_id:
+          type: string
+          description: Stripe Price ID for this tier
+        price_cents:
+          type: integer
+          description: Price in cents (e.g. 299 = $2.99)
+        currency:
+          type: string
+          description: ISO 4217 currency code (e.g. "usd")
 
     AdminUpsertLimitsRequest:
       type: object
@@ -1282,6 +1338,42 @@ components:
           type: integer
           minimum: 1
           description: Maximum recipients per secret for this tier
+        stripe_price_id:
+          type: string
+          description: Stripe Price ID for this tier
+        price_cents:
+          type: integer
+          description: Price in cents (e.g. 299 = $2.99)
+        currency:
+          type: string
+          description: ISO 4217 currency code (e.g. "usd")
+
+    PlanResponse:
+      type: object
+      properties:
+        tier:
+          type: string
+        secrets_limit:
+          type: integer
+        recipients_limit:
+          type: integer
+        max_text_length:
+          type: integer
+        price_cents:
+          type: integer
+          description: Price in cents (e.g. 299 = $2.99)
+        currency:
+          type: string
+          description: ISO 4217 currency code (e.g. "usd")
+
+    CheckoutRequest:
+      type: object
+      required:
+        - tier
+      properties:
+        tier:
+          type: string
+          description: The tier to subscribe to (e.g. "pro")
 
     ErrorResponse:
       type: object

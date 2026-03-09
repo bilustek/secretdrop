@@ -1589,6 +1589,70 @@ func TestUpdateSubscriptionStatus_AfterClose(t *testing.T) {
 	}
 }
 
+func TestFindTierByPriceID(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// Set a price ID on the "pro" tier via UpsertLimits.
+	tl := &user.TierLimits{
+		Tier:            "pro",
+		SecretsLimit:    100,
+		RecipientsLimit: 5,
+		StripePriceID:   "price_pro_monthly",
+		PriceCents:      299,
+		Currency:        "usd",
+	}
+
+	if err := repo.UpsertLimits(ctx, tl); err != nil {
+		t.Fatalf("UpsertLimits() error = %v", err)
+	}
+
+	tier, err := repo.FindTierByPriceID(ctx, "price_pro_monthly")
+	if err != nil {
+		t.Fatalf("FindTierByPriceID() error = %v", err)
+	}
+
+	if tier != "pro" {
+		t.Errorf("FindTierByPriceID() = %q; want %q", tier, "pro")
+	}
+}
+
+func TestFindTierByPriceID_NotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.FindTierByPriceID(ctx, "price_nonexistent")
+	if !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("FindTierByPriceID() error = %v; want model.ErrNotFound", err)
+	}
+}
+
+func TestFindTierByPriceID_AfterClose(t *testing.T) {
+	t.Parallel()
+
+	repo, err := sqlite.New(":memory:")
+	if err != nil {
+		t.Fatalf("sqlite.New() error = %v", err)
+	}
+
+	_ = repo.Close()
+
+	ctx := context.Background()
+
+	_, err = repo.FindTierByPriceID(ctx, "price_any")
+	if err == nil {
+		t.Error("FindTierByPriceID() after Close() should return error")
+	}
+
+	if errors.Is(err, model.ErrNotFound) {
+		t.Error("FindTierByPriceID() after Close() should return DB error, not model.ErrNotFound")
+	}
+}
+
 func TestUpdateSubscriptionPeriod_AfterClose(t *testing.T) {
 	t.Parallel()
 

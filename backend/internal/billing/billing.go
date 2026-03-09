@@ -17,7 +17,10 @@ import (
 	"github.com/bilustek/secretdrop/internal/user"
 )
 
-const slogKeyError = "error"
+const (
+	slogKeyError    = "error"
+	errTypeInternal = "internal_error"
+)
 
 // StripeClient defines the Stripe operations needed by the billing service.
 type StripeClient interface {
@@ -84,6 +87,7 @@ type Service struct {
 	successURL      string
 	cancelURL       string
 	portalReturnURL string
+	portalConfigID  string
 	notifier        slack.Notifier
 	projectMetaKey  string
 	projectMetaVal  string
@@ -154,6 +158,15 @@ func WithPortalReturnURL(url string) Option {
 	}
 }
 
+// WithPortalConfigID sets the Stripe Billing Portal configuration ID.
+func WithPortalConfigID(id string) Option {
+	return func(s *Service) error {
+		s.portalConfigID = id
+
+		return nil
+	}
+}
+
 // WithNotifier sets the Slack notifier for subscription events.
 func WithNotifier(n slack.Notifier) Option {
 	return func(s *Service) error {
@@ -207,11 +220,47 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 			return
 		}
 
+		var req model.CheckoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, "invalid_request", "Invalid request body", http.StatusBadRequest)
+
+			return
+		}
+
+		if req.Tier == "" || req.Tier == model.TierFree {
+			writeError(w, "invalid_request", "Invalid tier", http.StatusBadRequest)
+
+			return
+		}
+
+		tierLimits, err := s.userRepo.GetLimits(r.Context(), req.Tier)
+		if err != nil {
+			if errors.Is(err, model.ErrNotFound) {
+				writeError(w, "not_found", "Plan not found", http.StatusNotFound)
+			} else {
+				slog.Error("get tier limits", slogKeyError, err)
+				writeError(w, errTypeInternal, "Failed to look up plan", http.StatusInternalServerError)
+			}
+
+			return
+		}
+
+		priceID := tierLimits.StripePriceID
+		if priceID == "" {
+			priceID = s.priceID
+		}
+
+		if priceID == "" {
+			writeError(w, "configuration_error", "Plan not configured for billing", http.StatusUnprocessableEntity)
+
+			return
+		}
+
 		params := &stripe.CheckoutSessionCreateParams{
 			Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 			LineItems: []*stripe.CheckoutSessionCreateLineItemParams{
 				{
-					Price:    stripe.String(s.priceID),
+					Price:    stripe.String(priceID),
 					Quantity: stripe.Int64(1),
 				},
 			},
@@ -223,19 +272,22 @@ func (s *Service) HandleCheckout() http.HandlerFunc {
 			),
 		}
 
+		meta := map[string]string{"tier": req.Tier}
+
 		if s.projectMetaKey != "" && s.projectMetaVal != "" {
-			meta := map[string]string{s.projectMetaKey: s.projectMetaVal}
-			params.Metadata = meta
-			params.SubscriptionData = &stripe.CheckoutSessionCreateSubscriptionDataParams{
-				Metadata: meta,
-			}
+			meta[s.projectMetaKey] = s.projectMetaVal
+		}
+
+		params.Metadata = meta
+		params.SubscriptionData = &stripe.CheckoutSessionCreateSubscriptionDataParams{
+			Metadata: meta,
 		}
 
 		sess, err := s.stripeClient.CreateCheckoutSession(r.Context(), params)
 		if err != nil {
 			slog.Error("create checkout session", slogKeyError, err)
 			writeError(
-				w, "internal_error",
+				w, errTypeInternal,
 				"Failed to create checkout session",
 				http.StatusInternalServerError,
 			)
@@ -265,7 +317,7 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 			} else {
 				slog.Error("find subscription", slogKeyError, err)
 				writeError(
-					w, "internal_error",
+					w, errTypeInternal,
 					"Failed to find subscription",
 					http.StatusInternalServerError,
 				)
@@ -279,11 +331,15 @@ func (s *Service) HandlePortal() http.HandlerFunc {
 			ReturnURL: stripe.String(s.portalReturnURL),
 		}
 
+		if s.portalConfigID != "" {
+			params.Configuration = stripe.String(s.portalConfigID)
+		}
+
 		sess, err := s.stripeClient.CreatePortalSession(r.Context(), params)
 		if err != nil {
 			slog.Error("create portal session", slogKeyError, err)
 			writeError(
-				w, "internal_error",
+				w, errTypeInternal,
 				"Failed to create portal session",
 				http.StatusInternalServerError,
 			)

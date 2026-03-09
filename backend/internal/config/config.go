@@ -60,6 +60,7 @@ type Config struct {
 
 	stripeProjectMetaKey   string
 	stripeProjectMetaValue string
+	stripePortalConfigID   string
 }
 
 // Option configures a Config value.
@@ -304,6 +305,9 @@ func (c *Config) StripeProjectMetaKey() string { return c.stripeProjectMetaKey }
 // StripeProjectMetaValue returns the Stripe metadata value for project filtering.
 func (c *Config) StripeProjectMetaValue() string { return c.stripeProjectMetaValue }
 
+// StripePortalConfigID returns the Stripe Billing Portal configuration ID.
+func (c *Config) StripePortalConfigID() string { return c.stripePortalConfigID }
+
 // IsDev returns true when the application is running in development mode.
 func (c *Config) IsDev() bool { return c.env == "development" }
 
@@ -375,6 +379,7 @@ func Load(opts ...Option) (*Config, error) {
 
 	c.stripeProjectMetaKey = os.Getenv("STRIPE_PROJECT_METAKEY")
 	c.stripeProjectMetaValue = os.Getenv("STRIPE_PROJECT_METADATA")
+	c.stripePortalConfigID = os.Getenv("STRIPE_PORTAL_CONFIG_ID")
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {

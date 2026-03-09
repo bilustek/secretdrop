@@ -1,10 +1,11 @@
 import { use, useEffect, useRef, useState } from "react"
 import { Link, Outlet, useLocation, useNavigate } from "react-router"
-import { Lock, CreditCard, LogOut, Trash2, User } from "lucide-react"
+import { Lock, CreditCard, LogOut, Trash2, User, ArrowUpCircle } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { ThemeToggle } from "./ThemeToggle"
 import { UserAvatar } from "./UserAvatar"
 import { api } from "../api/client"
+import { PlanPickerModal } from "./PlanPickerModal"
 import { VERSION } from "../version"
 
 export function Layout() {
@@ -13,6 +14,7 @@ export function Layout() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -83,7 +85,7 @@ export function Layout() {
                     <div className="absolute right-0 mt-2 min-w-48 whitespace-nowrap rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg py-1 z-50">
                       <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
                         <p className="flex items-center justify-center gap-2 text-xs text-gray-500 py-2">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${auth.user.tier === "pro" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${auth.user.tier !== "free" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 dark:bg-gray-800"}`}>
                             {auth.user.tier}
                           </span>
                           <span>{auth.user.secrets_used} / {auth.user.secrets_limit} used</span>
@@ -93,7 +95,19 @@ export function Layout() {
                           {auth.user.name || auth.user.email}
                         </p>
                       </div>
-                      {auth.user.tier === "pro" && (
+                      {auth.user.tier === "free" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setUpgradeModalOpen(true)
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+                        >
+                          <ArrowUpCircle size={16} />
+                          Upgrade
+                        </button>
+                      ) : (
                         <button
                           type="button"
                           onClick={handleManageBilling}
@@ -173,8 +187,8 @@ export function Layout() {
                 You have {auth.user.secrets_limit - auth.user.secrets_used} of{" "}
                 {auth.user.secrets_limit} secrets remaining.
               </p>
-              {auth.user.tier === "pro" && (
-                <p>Your Pro subscription will be cancelled.</p>
+              {auth.user.tier !== "free" && (
+                <p>Your {auth.user.tier.charAt(0).toUpperCase() + auth.user.tier.slice(1)} subscription will be cancelled.</p>
               )}
               <p className="text-red-600 dark:text-red-400">
                 This action is permanent and cannot be undone.
@@ -207,6 +221,10 @@ export function Layout() {
             </div>
           </div>
         </div>
+      )}
+
+      {upgradeModalOpen && (
+        <PlanPickerModal onClose={() => setUpgradeModalOpen(false)} />
       )}
     </div>
   )

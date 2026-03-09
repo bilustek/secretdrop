@@ -5,4 +5,7 @@ type TierLimits struct {
 	Tier            string
 	SecretsLimit    int
 	RecipientsLimit int
+	StripePriceID   string
+	PriceCents      int
+	Currency        string
 }

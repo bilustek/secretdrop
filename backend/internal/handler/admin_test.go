@@ -1213,6 +1213,10 @@ func (m *mockAdminRepo) GetLimits(_ context.Context, _ string) (*user.TierLimits
 	return nil, model.ErrNotFound
 }
 
+func (m *mockAdminRepo) FindTierByPriceID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 // --- ListUsers error paths ---
 
 func TestAdminListUsers_ListError(t *testing.T) {
@@ -1905,5 +1909,428 @@ func TestAdminCancelSubscription_UpdateStatusError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- NewPlansHandler tests ---
+
+func TestNewPlansHandler_ListPlans(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierPro, SecretsLimit: 100, RecipientsLimit: 5, PriceCents: 999, Currency: "usd"},
+				{Tier: model.TierFree, SecretsLimit: 5, RecipientsLimit: 1, PriceCents: 0, Currency: "usd"},
+				{Tier: model.TierTeam, SecretsLimit: 1000, RecipientsLimit: 15, PriceCents: 2999, Currency: "usd"},
+			}, nil
+		},
+	}
+
+	h := handler.NewPlansHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/plans", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var plans []model.PlanResponse
+	if err := json.NewDecoder(rec.Body).Decode(&plans); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(plans) != 3 {
+		t.Fatalf("len(plans) = %d; want 3", len(plans))
+	}
+
+	// Plans should be sorted by price_cents ascending.
+	if plans[0].Tier != model.TierFree {
+		t.Errorf("plans[0].tier = %q; want %q", plans[0].Tier, model.TierFree)
+	}
+
+	if plans[1].Tier != model.TierPro {
+		t.Errorf("plans[1].tier = %q; want %q", plans[1].Tier, model.TierPro)
+	}
+
+	if plans[2].Tier != model.TierTeam {
+		t.Errorf("plans[2].tier = %q; want %q", plans[2].Tier, model.TierTeam)
+	}
+
+	// Verify max_text_length is populated correctly for each tier.
+	if plans[0].MaxTextLength != model.FreeMaxTextLength {
+		t.Errorf("plans[0].max_text_length = %d; want %d", plans[0].MaxTextLength, model.FreeMaxTextLength)
+	}
+
+	if plans[1].MaxTextLength != model.ProMaxTextLength {
+		t.Errorf("plans[1].max_text_length = %d; want %d", plans[1].MaxTextLength, model.ProMaxTextLength)
+	}
+
+	if plans[2].MaxTextLength != model.TeamMaxTextLength {
+		t.Errorf("plans[2].max_text_length = %d; want %d", plans[2].MaxTextLength, model.TeamMaxTextLength)
+	}
+
+	// Verify pricing fields.
+	if plans[1].PriceCents != 999 {
+		t.Errorf("plans[1].price_cents = %d; want 999", plans[1].PriceCents)
+	}
+
+	if plans[2].PriceCents != 2999 {
+		t.Errorf("plans[2].price_cents = %d; want 2999", plans[2].PriceCents)
+	}
+}
+
+func TestNewPlansHandler_EmptyList(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{}, nil
+		},
+	}
+
+	h := handler.NewPlansHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/plans", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var plans []model.PlanResponse
+	if err := json.NewDecoder(rec.Body).Decode(&plans); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(plans) != 0 {
+		t.Errorf("len(plans) = %d; want 0", len(plans))
+	}
+}
+
+func TestNewPlansHandler_DBError(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	}
+
+	h := handler.NewPlansHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/plans", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestNewPlansHandler_UnknownTierMaxTextLength(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockAdminRepo{
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: "enterprise", SecretsLimit: 5000, RecipientsLimit: 50, PriceCents: 9999, Currency: "usd"},
+			}, nil
+		},
+	}
+
+	h := handler.NewPlansHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/plans", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var plans []model.PlanResponse
+	if err := json.NewDecoder(rec.Body).Decode(&plans); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(plans) != 1 {
+		t.Fatalf("len(plans) = %d; want 1", len(plans))
+	}
+
+	// Unknown tier should fall back to FreeMaxTextLength.
+	if plans[0].MaxTextLength != model.FreeMaxTextLength {
+		t.Errorf("max_text_length = %d; want %d (free fallback)", plans[0].MaxTextLength, model.FreeMaxTextLength)
+	}
+}
+
+// --- computeEffectiveLimit / computeEffectiveRecipientsLimit with team tier ---
+
+func TestAdminListUsers_EffectiveLimit_TeamTierFallback(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "team@b.com", Name: "Team", Provider: "google", Tier: model.TierTeam, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			// Return empty map so no tier match, triggers team fallback.
+			return []*user.TierLimits{}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].SecretsLimit != model.TeamTierLimit {
+		t.Errorf("secrets_limit = %d; want %d", resp.Users[0].SecretsLimit, model.TeamTierLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveRecipientsLimit_TeamTierFallback(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "team@b.com", Name: "Team", Provider: "google", Tier: model.TierTeam, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].RecipientsLimit != model.TeamMaxRecipients {
+		t.Errorf("recipients_limit = %d; want %d", resp.Users[0].RecipientsLimit, model.TeamMaxRecipients)
+	}
+}
+
+func TestAdminListUsers_EffectiveRecipientsLimit_ProTierFallback(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "pro@b.com", Name: "Pro", Provider: "google", Tier: model.TierPro, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].RecipientsLimit != model.ProMaxRecipients {
+		t.Errorf("recipients_limit = %d; want %d", resp.Users[0].RecipientsLimit, model.ProMaxRecipients)
+	}
+}
+
+func TestAdminListUsers_EffectiveRecipientsLimit_FreeTierFallback(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "free@b.com", Name: "Free", Provider: "google", Tier: model.TierFree, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].RecipientsLimit != model.FreeMaxRecipients {
+		t.Errorf("recipients_limit = %d; want %d", resp.Users[0].RecipientsLimit, model.FreeMaxRecipients)
+	}
+}
+
+func TestAdminListUsers_EffectiveRecipientsLimit_Override(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	overrideVal := 42
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{
+					ID: 1, Email: "override@b.com", Name: "Override",
+					Provider: "google", Tier: model.TierFree,
+					RecipientsLimitOverride: &overrideVal, CreatedAt: now,
+				},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierFree, SecretsLimit: 5, RecipientsLimit: 1},
+			}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Users[0].RecipientsLimit != 42 {
+		t.Errorf("recipients_limit = %d; want 42", resp.Users[0].RecipientsLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveRecipientsLimit_TierFromLimitsMap(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "pro@b.com", Name: "Pro", Provider: "google", Tier: model.TierPro, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierPro, SecretsLimit: 200, RecipientsLimit: 25},
+			}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	// Should use the value from limitsMap, not the hardcoded ProMaxRecipients.
+	if resp.Users[0].RecipientsLimit != 25 {
+		t.Errorf("recipients_limit = %d; want 25", resp.Users[0].RecipientsLimit)
+	}
+}
+
+func TestAdminListUsers_EffectiveLimit_TeamTierFromLimitsMap(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	repo := &mockAdminRepo{
+		listUsersFunc: func(_ context.Context, _ ...user.ListOption) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Email: "team@b.com", Name: "Team", Provider: "google", Tier: model.TierTeam, CreatedAt: now},
+			}, nil
+		},
+		countUsersFunc: func(_ context.Context, _ ...user.ListOption) (int64, error) {
+			return 1, nil
+		},
+		listLimitsFunc: func(_ context.Context) ([]*user.TierLimits, error) {
+			return []*user.TierLimits{
+				{Tier: model.TierTeam, SecretsLimit: 2000, RecipientsLimit: 30},
+			}, nil
+		},
+	}
+	h := handler.NewAdminHandler(repo, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	var resp model.AdminUsersListResponse
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+
+	// Should use the value from limitsMap for team tier.
+	if resp.Users[0].SecretsLimit != 2000 {
+		t.Errorf("secrets_limit = %d; want 2000", resp.Users[0].SecretsLimit)
+	}
+
+	if resp.Users[0].RecipientsLimit != 30 {
+		t.Errorf("recipients_limit = %d; want 30", resp.Users[0].RecipientsLimit)
 	}
 }

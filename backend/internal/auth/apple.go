@@ -274,6 +274,9 @@ func (s *Service) HandleAppleLogin(cfg *oauth2.Config) http.HandlerFunc {
 func (s *Service) HandleAppleCallback(cfg *oauth2.Config, userRepo user.Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. Parse form body
+		const maxFormSize = 1 << 20 // 1 MB
+		r.Body = http.MaxBytesReader(w, r.Body, maxFormSize)
+
 		if err := r.ParseForm(); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{
 				"error": map[string]string{"type": "invalid_request", "message": "Invalid form data"},

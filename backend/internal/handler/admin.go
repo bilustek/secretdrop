@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -340,6 +342,9 @@ func (h *AdminHandler) ListLimits(w http.ResponseWriter, r *http.Request) {
 			Tier:            tl.Tier,
 			SecretsLimit:    tl.SecretsLimit,
 			RecipientsLimit: tl.RecipientsLimit,
+			StripePriceID:   tl.StripePriceID,
+			PriceCents:      tl.PriceCents,
+			Currency:        tl.Currency,
 		})
 	}
 
@@ -373,6 +378,9 @@ func (h *AdminHandler) UpsertLimits(w http.ResponseWriter, r *http.Request) {
 		Tier:            tier,
 		SecretsLimit:    req.SecretsLimit,
 		RecipientsLimit: req.RecipientsLimit,
+		StripePriceID:   req.StripePriceID,
+		PriceCents:      req.PriceCents,
+		Currency:        req.Currency,
 	}
 
 	if upsertErr := h.repo.UpsertLimits(r.Context(), tl); upsertErr != nil {
@@ -386,6 +394,9 @@ func (h *AdminHandler) UpsertLimits(w http.ResponseWriter, r *http.Request) {
 		Tier:            tl.Tier,
 		SecretsLimit:    tl.SecretsLimit,
 		RecipientsLimit: tl.RecipientsLimit,
+		StripePriceID:   tl.StripePriceID,
+		PriceCents:      tl.PriceCents,
+		Currency:        tl.Currency,
 	})
 }
 
@@ -445,11 +456,14 @@ func computeEffectiveLimit(u *model.User, limitsMap map[string]*user.TierLimits)
 		return tl.SecretsLimit
 	}
 
-	if u.Tier == model.TierPro {
+	switch u.Tier {
+	case model.TierTeam:
+		return model.TeamTierLimit
+	case model.TierPro:
 		return model.ProTierLimit
+	default:
+		return model.FreeTierLimit
 	}
-
-	return model.FreeTierLimit
 }
 
 // computeEffectiveRecipientsLimit returns the effective recipients limit for a user.
@@ -463,11 +477,14 @@ func computeEffectiveRecipientsLimit(u *model.User, limitsMap map[string]*user.T
 		return tl.RecipientsLimit
 	}
 
-	if u.Tier == model.TierPro {
+	switch u.Tier {
+	case model.TierTeam:
+		return model.TeamMaxRecipients
+	case model.TierPro:
 		return model.ProMaxRecipients
+	default:
+		return model.FreeMaxRecipients
 	}
-
-	return model.FreeMaxRecipients
 }
 
 func parseUserListOptions(r *http.Request) []user.ListOption {
@@ -516,6 +533,52 @@ func parseSubscriptionListOptions(r *http.Request) []user.ListOption {
 	opts = append(opts, user.WithPage(page, perPage))
 
 	return opts
+}
+
+// NewPlansHandler returns an http.HandlerFunc that lists all available plans
+// with their pricing. This is a public endpoint (no auth required).
+func NewPlansHandler(repo interface {
+	ListLimits(ctx context.Context) ([]*user.TierLimits, error)
+},
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limits, err := repo.ListLimits(r.Context())
+		if err != nil {
+			slog.Error("list plans", "error", err)
+			writeError(w, errTypeInternal, "Failed to fetch plans", http.StatusInternalServerError)
+
+			return
+		}
+
+		plans := make([]model.PlanResponse, 0, len(limits))
+		for _, tl := range limits {
+			plans = append(plans, model.PlanResponse{
+				Tier:            tl.Tier,
+				SecretsLimit:    tl.SecretsLimit,
+				RecipientsLimit: tl.RecipientsLimit,
+				MaxTextLength:   maxTextLengthForTier(tl.Tier),
+				PriceCents:      tl.PriceCents,
+				Currency:        tl.Currency,
+			})
+		}
+
+		slices.SortFunc(plans, func(a, b model.PlanResponse) int {
+			return a.PriceCents - b.PriceCents
+		})
+
+		writeJSON(w, http.StatusOK, plans)
+	}
+}
+
+func maxTextLengthForTier(tier string) int {
+	switch tier {
+	case model.TierTeam:
+		return model.TeamMaxTextLength
+	case model.TierPro:
+		return model.ProMaxTextLength
+	default:
+		return model.FreeMaxTextLength
+	}
 }
 
 func parsePagination(r *http.Request) (page, perPage int) {

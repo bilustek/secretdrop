@@ -101,6 +101,10 @@ type webhookUserRepo struct {
 	// subscription lookup
 	subscription    *model.Subscription
 	subscriptionErr error
+
+	// findTierByPriceID
+	findTierByPriceIDTier string
+	findTierByPriceIDErr  error
 }
 
 func (m *webhookUserRepo) Upsert(_ context.Context, _ *model.User) (*model.User, error) {
@@ -191,6 +195,14 @@ func (m *webhookUserRepo) GetLimits(_ context.Context, _ string) (*user.TierLimi
 	return nil, model.ErrNotFound
 }
 
+func (m *webhookUserRepo) FindTierByPriceID(_ context.Context, _ string) (string, error) {
+	return m.findTierByPriceIDTier, m.findTierByPriceIDErr
+}
+
+func (m *webhookUserRepo) ListLimits(_ context.Context) ([]*user.TierLimits, error) {
+	return nil, nil
+}
+
 const (
 	testWebhookSecret   = "whsec_test_secret"
 	testEventCreatedVal = 1_234_567_890
@@ -267,6 +279,7 @@ func TestHandleWebhook_CheckoutCompleted(t *testing.T) {
 		"subscription":        "sub_test_123",
 		"customer_email":      "user@example.com",
 		"client_reference_id": "42",
+		"metadata":            map[string]string{"tier": "pro"},
 	}
 
 	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
@@ -486,6 +499,180 @@ func TestHandleWebhook_SubscriptionUpdated_Active(t *testing.T) {
 		t.Fatal("UpdateTier was not called")
 	}
 
+	// No price items → fallback to pro
+	if repo.updateTierTier != model.TierPro {
+		t.Errorf("tier = %q; want %q", repo.updateTierTier, model.TierPro)
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_Active_WithPriceID(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:      &model.User{ID: 42, Tier: model.TierFree},
+		findTierByPriceIDTier: model.TierTeam,
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+		"items": map[string]any{
+			"data": []map[string]any{
+				{
+					"price": map[string]any{
+						"id": "price_team_123",
+					},
+					"current_period_start": 1700000000,
+					"current_period_end":   1702592000,
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier was not called")
+	}
+
+	if repo.updateTierTier != model.TierTeam {
+		t.Errorf("tier = %q; want %q", repo.updateTierTier, model.TierTeam)
+	}
+}
+
+func TestHandleWebhook_SubscriptionUpdated_Active_PriceLookupFails(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser:     &model.User{ID: 42, Tier: model.TierFree},
+		findTierByPriceIDErr: errors.New("not found"),
+	}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":       "sub_test_123",
+		"object":   "subscription",
+		"customer": "cus_test_123",
+		"status":   "active",
+		"items": map[string]any{
+			"data": []map[string]any{
+				{
+					"price": map[string]any{
+						"id": "price_unknown",
+					},
+					"current_period_start": 1700000000,
+					"current_period_end":   1702592000,
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "customer.subscription.updated", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier was not called")
+	}
+
+	// Price lookup fails → fallback to pro
+	if repo.updateTierTier != model.TierPro {
+		t.Errorf("tier = %q; want %q", repo.updateTierTier, model.TierPro)
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_TierFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+		"metadata":            map[string]string{"tier": "team"},
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier was not called")
+	}
+
+	if repo.updateTierTier != model.TierTeam {
+		t.Errorf("tier = %q; want %q", repo.updateTierTier, model.TierTeam)
+	}
+}
+
+func TestHandleWebhook_CheckoutCompleted_NoTierMetadata_FallbackPro(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{}
+	svc := newWebhookTestService(t, repo)
+
+	dataObj := map[string]any{
+		"id":                  "cs_test_123",
+		"object":              "checkout.session",
+		"customer":            "cus_test_123",
+		"subscription":        "sub_test_123",
+		"client_reference_id": "42",
+	}
+
+	payload := buildEventPayload(t, "checkout.session.completed", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.updateTierCalled {
+		t.Fatal("UpdateTier was not called")
+	}
+
+	// No metadata → fallback to pro
 	if repo.updateTierTier != model.TierPro {
 		t.Errorf("tier = %q; want %q", repo.updateTierTier, model.TierPro)
 	}

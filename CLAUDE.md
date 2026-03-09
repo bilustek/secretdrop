@@ -73,6 +73,7 @@ secretdrop/
 - `DELETE /api/v1/me` — Delete user account (204, auth required)
 - `PUT /api/v1/me/timezone` — Update user timezone (204, auth required)
 - `POST /api/v1/contact` — Send contact form message (200)
+- `GET /api/v1/plans` — List available plans with pricing (200, public)
 - `GET /auth/google` — Google OAuth login redirect
 - `GET /auth/google/callback` — Google OAuth callback
 - `GET /auth/github` — GitHub OAuth login redirect
@@ -115,7 +116,8 @@ secretdrop/
 | `JWT_SECRET` | Yes (prod only) | — |
 | `STRIPE_SECRET_KEY` | Yes (prod only) | — |
 | `STRIPE_WEBHOOK_SECRET` | Yes (prod only) | — |
-| `STRIPE_PRICE_ID` | Yes (prod only) | — |
+| `STRIPE_PRICE_ID` | No (deprecated) | — (use DB-driven pricing via admin panel) |
+| `STRIPE_PORTAL_CONFIG_ID` | No | — |
 | `SLACK_WEBHOOK_SUBSCRIPTIONS` | No | — |
 | `SLACK_WEBHOOK_NOTIFICATIONS` | No | — |
 | `ADMIN_USERNAME` | No | — |

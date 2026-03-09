@@ -49,6 +49,9 @@ export interface TierLimits {
   tier: string
   secrets_limit: number
   recipients_limit: number
+  stripe_price_id: string
+  price_cents: number
+  currency: string
 }
 
 export interface UserListParams {
@@ -142,7 +145,7 @@ export const adminApi = {
 
   fetchLimits: () => adminRequest<TierLimits[]>("/limits"),
 
-  upsertLimits: (tier: string, data: { secrets_limit: number; recipients_limit: number }) =>
+  upsertLimits: (tier: string, data: { secrets_limit: number; recipients_limit: number; stripe_price_id: string; price_cents: number; currency: string }) =>
     adminRequest<TierLimits>(`/limits/${tier}`, {
       method: "PUT",
       body: JSON.stringify(data),

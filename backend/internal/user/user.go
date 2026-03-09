@@ -25,6 +25,8 @@ type Repository interface {
 	UpdateSubscriptionPeriod(ctx context.Context, stripeSubID string, start, end time.Time) error
 
 	GetLimits(ctx context.Context, tier string) (*TierLimits, error)
+	ListLimits(ctx context.Context) ([]*TierLimits, error)
+	FindTierByPriceID(ctx context.Context, priceID string) (string, error)
 }
 
 // AdminRepository extends Repository with admin query operations.
@@ -36,7 +38,6 @@ type AdminRepository interface {
 	ListSubscriptions(ctx context.Context, opts ...ListOption) ([]*SubscriptionWithUser, error)
 	CountSubscriptions(ctx context.Context, opts ...ListOption) (int64, error)
 
-	ListLimits(ctx context.Context) ([]*TierLimits, error)
 	UpsertLimits(ctx context.Context, tl *TierLimits) error
 	DeleteLimits(ctx context.Context, tier string) error
 	UpdateSecretsLimitOverride(ctx context.Context, id int64, limit *int) error

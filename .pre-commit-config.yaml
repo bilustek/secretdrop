@@ -3,8 +3,10 @@ repos:
     rev: v1.0.0-rc.1
     hooks:
       - id: golangci-lint-mod
+        args: [--new=false]
       - id: go-mod-tidy
       - id: go-test-mod
+        args: [-race, -failfast, -count=1]
 
   - repo: local
     hooks:

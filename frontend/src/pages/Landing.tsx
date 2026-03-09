@@ -3,6 +3,7 @@ import { Navigate } from "react-router"
 import { Shield, Mail, Flame, KeyRound, Hash, Eye, Database } from "lucide-react"
 import { AuthContext } from "../context/AuthContext"
 import { API_URL } from "../api/config"
+import { api, type Plan } from "../api/client"
 
 const showGoogle = import.meta.env.VITE_ENABLE_GOOGLE_SIGNIN !== "false"
 const showApple = import.meta.env.VITE_ENABLE_APPLE_SIGNIN !== "false"
@@ -100,11 +101,29 @@ function AppleIcon({ className }: { className?: string }) {
   )
 }
 
+function formatPrice(plan: Plan): { amount: string; period: string } {
+  if (plan.price_cents === 0) {
+    return { amount: "Free", period: "forever" }
+  }
+  const dollars = (plan.price_cents / 100).toFixed(2)
+  return { amount: `$${dollars}`, period: "per month" }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${bytes / (1024 * 1024)}MB`
+  return `${bytes / 1024}KB`
+}
+
 export default function Landing() {
   const auth = use(AuthContext)
   const { before, highlighted, after } = useTypewriter(HEADLINES)
 
+  const [plans, setPlans] = useState<Plan[]>([])
   const [signInOpen, setSignInOpen] = useState(false)
+
+  useEffect(() => {
+    api.plans().then(setPlans).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!signInOpen) return
@@ -330,48 +349,50 @@ export default function Landing() {
       </section>
 
       {/* Pricing */}
-      <section className="max-w-3xl mx-auto px-4 py-16">
+      <section className="max-w-5xl mx-auto px-4 py-16">
         <h2 className="text-2xl font-bold text-center mb-8">Simple Pricing</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <h3 className="font-semibold text-lg">Free</h3>
-            <p className="text-3xl font-bold mt-2">$0</p>
-            <p className="text-sm text-gray-500 mt-1">forever</p>
-            <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li>5 secrets (lifetime)</li>
-              <li>1 recipient per secret</li>
-              <li>Up to 4KB per secret</li>
-              <li>AES-256-GCM encryption</li>
-            </ul>
-            <button
-              type="button"
-              onClick={() => setSignInOpen(true)}
-              className="mt-6 block w-full text-center px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-            >
-              Get Started
-            </button>
-          </div>
-          <div className="border-2 border-gray-900 dark:border-white rounded-xl p-6 relative">
-            <span className="absolute -top-3 left-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium px-2 py-1 rounded">
-              Popular
-            </span>
-            <h3 className="font-semibold text-lg">Pro</h3>
-            <p className="text-3xl font-bold mt-2">$2.99</p>
-            <p className="text-sm text-gray-500 mt-1">per month</p>
-            <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li>100 secrets per month</li>
-              <li>Up to 5 recipients</li>
-              <li>Up to 64KB per secret</li>
-              <li>AES-256-GCM encryption</li>
-            </ul>
-            <button
-              type="button"
-              onClick={() => setSignInOpen(true)}
-              className="mt-6 block w-full text-center px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity"
-            >
-              Start Free, Upgrade Later
-            </button>
-          </div>
+        <div className={`grid grid-cols-1 gap-6 ${plans.length === 2 ? "sm:grid-cols-2 max-w-3xl mx-auto" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
+          {plans.map((plan) => {
+            const { amount, period } = formatPrice(plan)
+            const isPopular = plan.tier === "pro"
+            return (
+              <div
+                key={plan.tier}
+                className={`rounded-xl p-6 relative ${isPopular ? "border-2 border-gray-900 dark:border-white" : "border border-gray-200 dark:border-gray-800"}`}
+              >
+                {isPopular && (
+                  <span className="absolute -top-3 left-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium px-2 py-1 rounded">
+                    Popular
+                  </span>
+                )}
+                <h3 className="font-semibold text-lg capitalize">{plan.tier}</h3>
+                <p className="text-3xl font-bold mt-2">{amount}</p>
+                <p className="text-sm text-gray-500 mt-1">{period}</p>
+                <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <li>{plan.secrets_limit} secrets {plan.price_cents === 0 ? "(lifetime)" : "per month"}</li>
+                  <li>Up to {plan.recipients_limit} recipient{plan.recipients_limit > 1 ? "s" : ""}</li>
+                  <li>Up to {formatBytes(plan.max_text_length)} per secret</li>
+                  <li>AES-256-GCM encryption</li>
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (plan.price_cents > 0) {
+                      localStorage.setItem("pending_checkout_tier", plan.tier)
+                    }
+                    setSignInOpen(true)
+                  }}
+                  className={`mt-6 block w-full text-center px-4 py-2 rounded-lg font-medium transition-all ${
+                    plan.price_cents === 0
+                      ? "border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900"
+                      : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90"
+                  }`}
+                >
+                  {plan.price_cents === 0 ? "Get Started" : "Start Free, Upgrade Later"}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </section>
 

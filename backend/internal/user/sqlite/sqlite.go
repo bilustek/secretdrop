@@ -44,7 +44,10 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id ON subscriptions(stripe_s
 CREATE TABLE IF NOT EXISTS limits (
     tier             TEXT PRIMARY KEY,
     secrets_limit    INTEGER NOT NULL DEFAULT 5,
-    recipients_limit INTEGER NOT NULL DEFAULT 1
+    recipients_limit INTEGER NOT NULL DEFAULT 1,
+    stripe_price_id  TEXT NOT NULL DEFAULT '',
+    price_cents      INTEGER NOT NULL DEFAULT 0,
+    currency         TEXT NOT NULL DEFAULT 'usd'
 );
 INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('free', 5, 1);
 INSERT OR IGNORE INTO limits (tier, secrets_limit, recipients_limit) VALUES ('pro', 100, 5);
@@ -86,6 +89,13 @@ func New(dsn string) (*Repository, error) {
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN secrets_limit INTEGER")
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN recipients_limit INTEGER")
+	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN stripe_price_id TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN price_cents INTEGER NOT NULL DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE limits ADD COLUMN currency TEXT NOT NULL DEFAULT 'usd'")
+	_, _ = db.Exec(`INSERT OR IGNORE INTO limits
+		(tier, secrets_limit, recipients_limit, stripe_price_id, price_cents, currency)
+		VALUES ('team', 1000, 15, '', 2999, 'usd')`)
+	_, _ = db.Exec("UPDATE limits SET price_cents = 299, currency = 'usd' WHERE tier = 'pro' AND price_cents = 0")
 
 	return &Repository{db: db}, nil
 }
@@ -482,6 +492,25 @@ func (r *Repository) UpdateSubscriptionPeriod(ctx context.Context, stripeSubID s
 	return nil
 }
 
+// FindTierByPriceID looks up the tier name associated with a Stripe price ID.
+// Returns model.ErrNotFound if no tier has the given price ID.
+func (r *Repository) FindTierByPriceID(ctx context.Context, priceID string) (string, error) {
+	var tier string
+
+	err := r.db.QueryRowContext(ctx,
+		"SELECT tier FROM limits WHERE stripe_price_id = ?", priceID,
+	).Scan(&tier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", model.ErrNotFound
+		}
+
+		return "", fmt.Errorf("find tier by price ID: %w", err)
+	}
+
+	return tier, nil
+}
+
 // Allowed sort columns for users (whitelist to prevent SQL injection).
 var userSortColumns = map[string]string{
 	"created_at":   "created_at",
@@ -717,11 +746,15 @@ func (r *Repository) CountSubscriptions(ctx context.Context, opts ...user.ListOp
 // GetLimits returns the tier limits for the given tier.
 // Returns model.ErrNotFound if the tier does not exist.
 func (r *Repository) GetLimits(ctx context.Context, tier string) (*user.TierLimits, error) {
-	const query = `SELECT tier, secrets_limit, recipients_limit FROM limits WHERE tier = ?`
+	const query = `SELECT tier, secrets_limit, recipients_limit,
+		stripe_price_id, price_cents, currency FROM limits WHERE tier = ?`
 
 	tl := &user.TierLimits{}
 
-	err := r.db.QueryRowContext(ctx, query, tier).Scan(&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit)
+	err := r.db.QueryRowContext(ctx, query, tier).Scan(
+		&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit,
+		&tl.StripePriceID, &tl.PriceCents, &tl.Currency,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, model.ErrNotFound
@@ -735,7 +768,8 @@ func (r *Repository) GetLimits(ctx context.Context, tier string) (*user.TierLimi
 
 // ListLimits returns all tier limit configurations ordered by tier name.
 func (r *Repository) ListLimits(ctx context.Context) ([]*user.TierLimits, error) {
-	const query = `SELECT tier, secrets_limit, recipients_limit FROM limits ORDER BY tier`
+	const query = `SELECT tier, secrets_limit, recipients_limit,
+		stripe_price_id, price_cents, currency FROM limits ORDER BY tier`
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -748,7 +782,10 @@ func (r *Repository) ListLimits(ctx context.Context) ([]*user.TierLimits, error)
 
 	for rows.Next() {
 		tl := &user.TierLimits{}
-		if err := rows.Scan(&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit); err != nil {
+		if err := rows.Scan(
+			&tl.Tier, &tl.SecretsLimit, &tl.RecipientsLimit,
+			&tl.StripePriceID, &tl.PriceCents, &tl.Currency,
+		); err != nil {
 			return nil, fmt.Errorf("scan limits: %w", err)
 		}
 
@@ -765,13 +802,20 @@ func (r *Repository) ListLimits(ctx context.Context) ([]*user.TierLimits, error)
 // UpsertLimits creates or updates the limits for a tier.
 func (r *Repository) UpsertLimits(ctx context.Context, tl *user.TierLimits) error {
 	const query = `
-		INSERT INTO limits (tier, secrets_limit, recipients_limit) VALUES (?, ?, ?)
+		INSERT INTO limits (tier, secrets_limit, recipients_limit, stripe_price_id, price_cents, currency)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(tier) DO UPDATE SET
 			secrets_limit    = excluded.secrets_limit,
-			recipients_limit = excluded.recipients_limit
+			recipients_limit = excluded.recipients_limit,
+			stripe_price_id  = excluded.stripe_price_id,
+			price_cents      = excluded.price_cents,
+			currency         = excluded.currency
 	`
 
-	if _, err := r.db.ExecContext(ctx, query, tl.Tier, tl.SecretsLimit, tl.RecipientsLimit); err != nil {
+	if _, err := r.db.ExecContext(ctx, query,
+		tl.Tier, tl.SecretsLimit, tl.RecipientsLimit,
+		tl.StripePriceID, tl.PriceCents, tl.Currency,
+	); err != nil {
 		return fmt.Errorf("upsert limits: %w", err)
 	}
 

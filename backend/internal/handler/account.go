@@ -57,7 +57,7 @@ func NewDeleteAccountHandler(
 		}
 
 		if notifier != nil {
-			go func() {
+			go func() { //nolint:gosec // G118: fire-and-forget notification must outlive request
 				ev := slack.Event{
 					Type:    slack.EventUserDeleted,
 					Message: "User account deleted",

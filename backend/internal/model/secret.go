@@ -11,6 +11,10 @@ const (
 	FreeMaxRecipients = 1
 	// ProMaxRecipients is the maximum number of recipients for pro tier.
 	ProMaxRecipients = 5
+	// TeamMaxTextLength is the maximum secret text length for team tier (256KB).
+	TeamMaxTextLength = 262144
+	// TeamMaxRecipients is the maximum number of recipients for team tier.
+	TeamMaxRecipients = 15
 )
 
 // Secret represents a stored encrypted secret in the database.

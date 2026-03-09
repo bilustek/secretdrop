@@ -124,12 +124,18 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, event stripe.Even
 		return
 	}
 
-	if err := s.userRepo.UpdateTier(ctx, userID, model.TierPro); err != nil {
-		slog.Error("update user tier to pro", slogKeyError, err, slogKeyUserID, userID)
+	// Determine tier from session metadata (set during checkout)
+	tier := session.Metadata["tier"]
+	if tier == "" {
+		tier = model.TierPro // fallback for legacy sessions
+	}
+
+	if err := s.userRepo.UpdateTier(ctx, userID, tier); err != nil {
+		slog.Error("update user tier", slogKeyError, err, slogKeyUserID, userID, "tier", tier)
 	}
 
 	if s.notifier != nil {
-		go func() {
+		go func() { //nolint:gosec // G118: fire-and-forget notification must outlive request
 			ev := slack.Event{
 				Type:    slack.EventSubscriptionCreated,
 				Message: "New subscription",
@@ -230,7 +236,7 @@ func (s *Service) handleSubscriptionDeleted(ctx context.Context, event stripe.Ev
 	}
 
 	if s.notifier != nil {
-		go func() {
+		go func() { //nolint:gosec // G118: fire-and-forget notification must outlive request
 			ev := slack.Event{
 				Type:    slack.EventSubscriptionCancelled,
 				Message: "Subscription cancelled",
@@ -293,7 +299,14 @@ func (s *Service) handleSubscriptionUpdated(ctx context.Context, event stripe.Ev
 		return
 	}
 
-	tier := tierForStatus(sub.Status)
+	priceID := ""
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		if sub.Items.Data[0].Price != nil {
+			priceID = sub.Items.Data[0].Price.ID
+		}
+	}
+
+	tier := s.resolveTier(ctx, sub.Status, priceID)
 
 	if err := s.userRepo.UpdateTier(ctx, u.ID, tier); err != nil {
 		slog.Error("update user tier", slogKeyError, err, slogKeyUserID, u.ID, "tier", tier)
@@ -345,10 +358,19 @@ func (s *Service) findUserWithRetry(ctx context.Context, customerID string) (*mo
 	return nil, fmt.Errorf("find user by stripe customer ID after retries: %w", err)
 }
 
-func tierForStatus(status stripe.SubscriptionStatus) string {
-	if status == stripe.SubscriptionStatusActive {
-		return model.TierPro
+func (s *Service) resolveTier(ctx context.Context, status stripe.SubscriptionStatus, priceID string) string {
+	if status != stripe.SubscriptionStatusActive {
+		return model.TierFree
 	}
 
-	return model.TierFree
+	if priceID != "" {
+		tier, err := s.userRepo.FindTierByPriceID(ctx, priceID)
+		if err == nil {
+			return tier
+		}
+
+		slog.Warn("resolve tier from price ID", slogKeyError, err, "price_id", priceID)
+	}
+
+	return model.TierPro
 }
