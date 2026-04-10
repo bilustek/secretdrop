@@ -1,2 +1,2 @@
 // Version is the application version, updated by bump-my-version.
-export const VERSION = "0.6.5"
+export const VERSION = "0.6.6"
