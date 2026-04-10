@@ -37,24 +37,21 @@ func (h *Handler) Handle(ctx context.Context, record slog.Record) error {
 	err := h.inner.Handle(ctx, record)
 
 	if record.Level >= slog.LevelError {
+		attrs := make(sentry.Context)
+		record.Attrs(func(attr slog.Attr) bool {
+			attrs[attr.Key] = attr.Value.String()
+
+			return true
+		})
+
 		if hub := sentry.GetHubFromContext(ctx); hub != nil {
 			hub.WithScope(func(scope *sentry.Scope) {
-				record.Attrs(func(attr slog.Attr) bool {
-					scope.SetExtra(attr.Key, attr.Value.String())
-
-					return true
-				})
-
+				scope.SetContext("slog", attrs)
 				hub.CaptureMessage(record.Message)
 			})
 		} else {
 			sentry.WithScope(func(scope *sentry.Scope) {
-				record.Attrs(func(attr slog.Attr) bool {
-					scope.SetExtra(attr.Key, attr.Value.String())
-
-					return true
-				})
-
+				scope.SetContext("slog", attrs)
 				sentry.CaptureMessage(record.Message)
 			})
 		}
