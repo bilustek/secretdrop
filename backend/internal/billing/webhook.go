@@ -313,19 +313,55 @@ func (s *Service) handleSubscriptionUpdated(ctx context.Context, event stripe.Ev
 	}
 }
 
+// metadataHolder carries a stripe metadata bag for JSON-unmarshaling nested
+// locations (e.g. invoice.subscription_details, invoice.lines.data[]).
+type metadataHolder struct {
+	Metadata map[string]string `json:"metadata"`
+}
+
+type invoiceLines struct {
+	Data []metadataHolder `json:"data"`
+}
+
+type eventMetadataEnvelope struct {
+	Metadata            map[string]string `json:"metadata"`
+	SubscriptionDetails *metadataHolder   `json:"subscription_details,omitempty"`
+	Lines               *invoiceLines     `json:"lines,omitempty"`
+}
+
 // matchesProjectMetadata checks if a Stripe event belongs to this project
 // by inspecting metadata on the event's data object. Different event types
-// carry metadata in different locations (session, subscription, invoice).
+// carry metadata in different locations:
+//   - checkout.session.*: root metadata
+//   - customer.subscription.*: root metadata (set via SubscriptionData.Metadata)
+//   - invoice.*: Stripe does not copy subscription metadata to the invoice root,
+//     so we also look at subscription_details.metadata (populated by Stripe for
+//     subscription renewals) and lines.data[].metadata.
 func (s *Service) matchesProjectMetadata(event stripe.Event) bool {
-	var raw struct {
-		Metadata map[string]string `json:"metadata"`
-	}
+	var raw eventMetadataEnvelope
 
 	if err := json.Unmarshal(event.Data.Raw, &raw); err != nil {
 		return false
 	}
 
-	return raw.Metadata[s.projectMetaKey] == s.projectMetaVal
+	if raw.Metadata[s.projectMetaKey] == s.projectMetaVal {
+		return true
+	}
+
+	if raw.SubscriptionDetails != nil &&
+		raw.SubscriptionDetails.Metadata[s.projectMetaKey] == s.projectMetaVal {
+		return true
+	}
+
+	if raw.Lines != nil {
+		for _, line := range raw.Lines.Data {
+			if line.Metadata[s.projectMetaKey] == s.projectMetaVal {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (s *Service) findUserWithRetry(ctx context.Context, customerID string) (*model.User, error) {
