@@ -1992,6 +1992,159 @@ func TestMatchesProjectMetadata_UnmarshalError(t *testing.T) {
 	}
 }
 
+func TestMatchesProjectMetadata_NestedLocations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{
+			name: "root metadata match",
+			raw:  `{"metadata":{"project":"secretdrop"}}`,
+			want: true,
+		},
+		{
+			name: "subscription_details metadata match (invoice renewal)",
+			raw:  `{"metadata":{},"subscription_details":{"metadata":{"project":"secretdrop"}}}`,
+			want: true,
+		},
+		{
+			name: "lines.data[0] metadata match (invoice line item)",
+			raw:  `{"metadata":{},"lines":{"data":[{"metadata":{"project":"secretdrop"}}]}}`,
+			want: true,
+		},
+		{
+			name: "lines.data[1] metadata match (second line item)",
+			raw:  `{"metadata":{},"lines":{"data":[{"metadata":{}},{"metadata":{"project":"secretdrop"}}]}}`,
+			want: true,
+		},
+		{
+			name: "no metadata anywhere",
+			raw:  `{"metadata":{},"subscription_details":{"metadata":{}},"lines":{"data":[{"metadata":{}}]}}`,
+			want: false,
+		},
+		{
+			name: "wrong value everywhere",
+			raw:  `{"metadata":{"project":"other"},"subscription_details":{"metadata":{"project":"other"}},"lines":{"data":[{"metadata":{"project":"other"}}]}}`,
+			want: false,
+		},
+		{
+			name: "subscription_details present but nil metadata",
+			raw:  `{"metadata":{},"subscription_details":{}}`,
+			want: false,
+		},
+		{
+			name: "empty lines array",
+			raw:  `{"metadata":{},"lines":{"data":[]}}`,
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := &webhookUserRepo{}
+			svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+			event := stripe.Event{
+				Data: &stripe.EventData{Raw: json.RawMessage(tc.raw)},
+			}
+
+			if got := svc.matchesProjectMetadata(event); got != tc.want {
+				t.Errorf("matchesProjectMetadata() = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_ProjectMatchViaSubscriptionDetails(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42, Tier: model.TierPro},
+		subscription: &model.Subscription{
+			StripeSubscriptionID: "sub_test_123",
+		},
+	}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+		"metadata": map[string]string{},
+		"subscription_details": map[string]any{
+			"metadata": map[string]string{"project": "secretdrop"},
+		},
+		"lines": map[string]any{
+			"data": []map[string]any{
+				{
+					"period": map[string]any{
+						"start": 1700000000,
+						"end":   1702592000,
+					},
+				},
+			},
+		},
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if !repo.resetSecretsUsedCalled {
+		t.Fatal("ResetSecretsUsed should be called when subscription_details metadata matches")
+	}
+}
+
+func TestHandleWebhook_InvoicePaid_ProjectMismatchViaSubscriptionDetails(t *testing.T) {
+	t.Parallel()
+
+	repo := &webhookUserRepo{
+		findByStripeUser: &model.User{ID: 42, Tier: model.TierPro},
+	}
+	svc := newWebhookTestService(t, repo, WithProjectMetadata("project", "secretdrop"))
+
+	dataObj := map[string]any{
+		"id":       "in_test_123",
+		"object":   "invoice",
+		"customer": "cus_test_123",
+		"metadata": map[string]string{},
+		"subscription_details": map[string]any{
+			"metadata": map[string]string{"project": "other-app"},
+		},
+	}
+
+	payload := buildEventPayload(t, "invoice.paid", dataObj)
+	sig := signPayload(t, payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+
+	rec := httptest.NewRecorder()
+	svc.HandleWebhook().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d; want %d", rec.Code, http.StatusOK)
+	}
+
+	if repo.resetSecretsUsedCalled {
+		t.Error("ResetSecretsUsed should NOT be called when no metadata matches this project")
+	}
+}
+
 func TestFindUserWithRetry_NonNotFoundErrorOnRetry(t *testing.T) {
 	t.Parallel()
 
