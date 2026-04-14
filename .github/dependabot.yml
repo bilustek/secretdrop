@@ -29,6 +29,28 @@ updates:
     labels:
       - "dependencies"
       - "npm"
+    groups:
+      # react & react-dom must ship with matching versions; group their types too.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "eslint-plugin-*"
+          - "typescript-eslint"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
