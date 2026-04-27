@@ -35,6 +35,7 @@ export default function AdminLimits() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/param-change data fetch
     fetchLimits()
   }, [fetchLimits])
 

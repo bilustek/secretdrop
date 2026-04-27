@@ -74,11 +74,7 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [showSuggestions])
 
-  useEffect(() => {
-    if (auth?.user?.default_expiry && !expiresIn) {
-      setExpiresIn(auth.user.default_expiry)
-    }
-  }, [auth?.user?.default_expiry, expiresIn])
+  const effectiveExpiresIn = expiresIn || auth?.user?.default_expiry || ""
 
   useEffect(() => {
     if (!auth?.user) return
@@ -133,7 +129,7 @@ export default function Dashboard() {
     setIsSubmitting(true)
 
     try {
-      const response = await api.createSecret({ text, to: emails, expires_in: expiresIn })
+      const response = await api.createSecret({ text, to: emails, expires_in: effectiveExpiresIn })
       addEmails(emails)
       setResult(response)
       setShowModal(true)
@@ -258,7 +254,7 @@ export default function Dashboard() {
               Expires after
             </label>
             <select
-              value={expiresIn}
+              value={effectiveExpiresIn}
               onChange={(e) => setExpiresIn(e.target.value)}
               className="w-full sm:w-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
             >

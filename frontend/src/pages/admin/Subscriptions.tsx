@@ -7,6 +7,14 @@ const PER_PAGE = 20
 
 type SortOrder = "asc" | "desc"
 
+function SortIndicator({ sortOrder }: { sortOrder: SortOrder }) {
+  return sortOrder === "asc" ? (
+    <ArrowUp size={14} className="inline ml-1" />
+  ) : (
+    <ArrowDown size={14} className="inline ml-1" />
+  )
+}
+
 export default function AdminSubscriptions() {
   const [data, setData] = useState<AdminSubscriptionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,6 +54,7 @@ export default function AdminSubscriptions() {
   }, [debouncedSearch, statusFilter, sortOrder, page])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/param-change data fetch
     fetchSubscriptions()
   }, [fetchSubscriptions])
 
@@ -66,14 +75,6 @@ export default function AdminSubscriptions() {
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PER_PAGE)) : 1
-
-  const SortIndicator = () => {
-    return sortOrder === "asc" ? (
-      <ArrowUp size={14} className="inline ml-1" />
-    ) : (
-      <ArrowDown size={14} className="inline ml-1" />
-    )
-  }
 
   return (
     <div>
@@ -155,7 +156,7 @@ export default function AdminSubscriptions() {
                     onClick={handleSort}
                   >
                     Created At
-                    <SortIndicator />
+                    <SortIndicator sortOrder={sortOrder} />
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
                     Actions
