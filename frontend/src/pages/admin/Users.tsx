@@ -7,6 +7,23 @@ const PER_PAGE = 20
 type SortField = "email" | "created_at"
 type SortOrder = "asc" | "desc"
 
+function SortIndicator({
+  field,
+  sortField,
+  sortOrder,
+}: {
+  field: SortField
+  sortField: SortField
+  sortOrder: SortOrder
+}) {
+  if (sortField !== field) return null
+  return sortOrder === "asc" ? (
+    <ArrowUp size={14} className="inline ml-1" />
+  ) : (
+    <ArrowDown size={14} className="inline ml-1" />
+  )
+}
+
 export default function AdminUsers() {
   const [data, setData] = useState<AdminUsersResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,6 +63,7 @@ export default function AdminUsers() {
   }, [search, tierFilter, providerFilter, sortField, sortOrder, page])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/param-change data fetch
     fetchUsers()
   }, [fetchUsers])
 
@@ -117,15 +135,6 @@ export default function AdminUsers() {
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PER_PAGE)) : 1
-
-  const SortIndicator = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null
-    return sortOrder === "asc" ? (
-      <ArrowUp size={14} className="inline ml-1" />
-    ) : (
-      <ArrowDown size={14} className="inline ml-1" />
-    )
-  }
 
   const tierOptions = tiers.map((t) => t.tier)
 
@@ -204,7 +213,7 @@ export default function AdminUsers() {
                     onClick={() => handleSort("email")}
                   >
                     Email
-                    <SortIndicator field="email" />
+                    <SortIndicator field="email" sortField={sortField} sortOrder={sortOrder} />
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">
                     Name
@@ -226,7 +235,7 @@ export default function AdminUsers() {
                     onClick={() => handleSort("created_at")}
                   >
                     Created At
-                    <SortIndicator field="created_at" />
+                    <SortIndicator field="created_at" sortField={sortField} sortOrder={sortOrder} />
                   </th>
                 </tr>
               </thead>
