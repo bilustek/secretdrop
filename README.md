@@ -142,6 +142,17 @@ Run the local server, hit: http://localhost:8080/docs, (Scalar UI) protected by
 
 ---
 
+## Rake Tasks
+
+```bash
+rake -T
+
+rake install:frontend  # install frontend dependencies
+rake run:backend       # run backend
+```
+
+---
+
 ## Contributor(s)
 
 * [Uğur Özyılmazel](https://github.com/vigo) - Creator, maintainer
