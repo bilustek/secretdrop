@@ -10,7 +10,7 @@ require (
 	github.com/resend/resend-go/v2 v2.28.0
 	github.com/stripe/stripe-go/v82 v82.5.1
 	golang.org/x/oauth2 v0.36.0
-	modernc.org/sqlite v1.51.0
+	modernc.org/sqlite v1.52.0
 )
 
 require (
